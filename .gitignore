@@ -36,6 +36,9 @@ src/geostats/api/static/app.css
 # Node (only used locally for tailwind CLI)
 node_modules/
 
+# Worktrees
+.worktrees/
+
 # IDE / OS
 .idea/
 .vscode/
