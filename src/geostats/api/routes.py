@@ -1,0 +1,184 @@
+import re
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Literal
+
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
+from fastapi.responses import RedirectResponse, Response
+from fastapi.templating import Jinja2Templates
+from sqlalchemy.orm import Session
+
+from geostats.api.deps import get_db
+from geostats.models import Account, RatingSnapshot
+from geostats.stats.aggregates import summarize_profile
+from geostats.stats.series import get_series
+
+router = APIRouter()
+
+_templates_dir = Path(__file__).parent / "templates"
+templates = Jinja2Templates(directory=_templates_dir)
+
+_ID_RE = re.compile(r"^[A-Za-z0-9]{20,24}$")
+_URL_RE = re.compile(r"geoguessr\.com/user/([A-Za-z0-9]{20,24})")
+
+
+def parse_user_id(value: str) -> str:
+    value = value.strip()
+    m = _URL_RE.search(value)
+    if m:
+        return m.group(1)
+    if _ID_RE.match(value):
+        return value
+    raise LookupError(f"invalid user id or url: {value!r}")
+
+
+def _fmt_rating(v: object) -> str:
+    if not isinstance(v, int):
+        return "—"
+    return f"{v:,}".replace(",", " ")
+
+
+def _fmt_delta(v: object) -> str:
+    if not isinstance(v, int):
+        return "—"
+    if v > 0:
+        return f"+{v}"
+    if v < 0:
+        return f"−{abs(v)}"
+    return "—"
+
+
+def _fmt_rank(v: object) -> str:
+    if not isinstance(v, int):
+        return "—"
+    return f"#{v}"
+
+
+_CC_LEN = 2
+_SECS_MINUTE = 60
+_SECS_HOUR = 3600
+_SECS_DAY = 86400
+
+
+def _country_flag(code: object) -> str:
+    if not isinstance(code, str) or len(code) != _CC_LEN:
+        return ""
+    return "".join(chr(0x1F1E6 - 65 + ord(c.upper())) for c in code)
+
+
+def _time_ago(dt: object) -> str:
+    if not isinstance(dt, datetime):
+        return "unknown"
+    now = datetime.now(tz=UTC)
+    diff = int((now - dt).total_seconds())
+    if diff < _SECS_MINUTE:
+        return "just now"
+    if diff < _SECS_HOUR:
+        return f"{diff // _SECS_MINUTE}m ago"
+    if diff < _SECS_DAY:
+        return f"{diff // _SECS_HOUR}h ago"
+    return f"{diff // _SECS_DAY}d ago"
+
+
+templates.env.filters["fmt_rating"] = _fmt_rating
+templates.env.filters["fmt_delta"] = _fmt_delta
+templates.env.filters["fmt_rank"] = _fmt_rank
+templates.env.filters["country_flag"] = _country_flag
+templates.env.filters["time_ago"] = _time_ago
+templates.env.globals["getattr"] = getattr
+
+
+@router.get("/healthz")
+async def healthz() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+@router.get("/")
+async def landing(request: Request) -> Response:
+    return templates.TemplateResponse(request, "landing.html")
+
+
+@router.post("/lookup")
+async def lookup(
+    request: Request,
+    profile: str = Form(...),
+    db: Session = Depends(get_db),  # noqa: B008
+) -> Response:
+    try:
+        user_id = parse_user_id(profile)
+    except LookupError:
+        return templates.TemplateResponse(
+            request,
+            "landing.html",
+            {
+                "error": (
+                    "Invalid input. Paste a GeoGuessr profile URL"
+                    " or a 20–24 character user ID."
+                ),
+            },
+            status_code=400,
+        )
+
+    if db.get(Account, user_id) is None:
+        now = datetime.now(tz=UTC)
+        db.add(Account(id=user_id, nick=user_id, tracked=True, created_at=now))
+        db.commit()
+
+    return RedirectResponse(url=f"/profile/{user_id}", status_code=303)
+
+
+@router.get("/profile/{user_id}")
+async def profile_page(
+    user_id: str,
+    request: Request,
+    db: Session = Depends(get_db),  # noqa: B008
+) -> Response:
+    try:
+        parse_user_id(user_id)
+    except LookupError:
+        raise HTTPException(status_code=404) from None
+
+    account = db.get(Account, user_id)
+    if account is None:
+        raise HTTPException(status_code=404)
+
+    if account.last_polled_at is None:
+        return templates.TemplateResponse(
+            request,
+            "profile.html",
+            {"account": account, "collecting": True},
+        )
+
+    snaps: list[RatingSnapshot] = (
+        db.query(RatingSnapshot)
+        .filter(RatingSnapshot.account_id == user_id)
+        .order_by(RatingSnapshot.captured_at.asc())
+        .all()
+    )
+    summary = summarize_profile(account, snaps)
+    return templates.TemplateResponse(
+        request,
+        "profile.html",
+        {"summary": summary, "collecting": False},
+    )
+
+
+@router.get("/api/profile/{user_id}/series")
+async def series_api(
+    user_id: str,
+    db: Session = Depends(get_db),  # noqa: B008
+    mode: Literal["overall", "moving", "nomove", "nmpz"] = Query(default="overall"),
+    range_: Literal["7d", "30d", "90d", "all"] = Query(default="30d", alias="range"),
+) -> dict[str, object]:
+    account = db.get(Account, user_id)
+    if account is None:
+        raise HTTPException(status_code=404, detail="not found")
+
+    snaps: list[RatingSnapshot] = (
+        db.query(RatingSnapshot)
+        .filter(RatingSnapshot.account_id == user_id)
+        .order_by(RatingSnapshot.captured_at.asc())
+        .all()
+    )
+    points = get_series(snaps, mode, range_)
+    return {"mode": mode, "range": range_, "points": points}
