@@ -1,10 +1,10 @@
 import pytest
 from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 from testcontainers.postgres import PostgresContainer
 
-from geostats.db import Base
 import geostats.models  # noqa: F401
+from geostats.db import Base
 
 
 @pytest.fixture(scope="session")
@@ -21,8 +21,7 @@ def pg_engine():
 def db(pg_engine) -> Session:
     connection = pg_engine.connect()
     transaction = connection.begin()
-    SessionLocal = sessionmaker(bind=connection, autoflush=False, expire_on_commit=False)
-    session = SessionLocal()
+    session = Session(bind=connection, autoflush=False, expire_on_commit=False)
     try:
         yield session
     finally:
