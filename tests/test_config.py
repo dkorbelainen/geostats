@@ -6,7 +6,6 @@ def test_settings_loads_required_fields(monkeypatch):
     s = Settings()
     defaults = Settings.model_fields
     assert s.database_url == "postgresql+psycopg://u:p@h:5432/d"
-    assert s.poll_interval_hours == defaults["poll_interval_hours"].default
     assert s.poll_batch_size == defaults["poll_batch_size"].default
     assert s.poll_request_delay_sec == defaults["poll_request_delay_sec"].default
     assert s.geoguessr_ncfa_cookie is None

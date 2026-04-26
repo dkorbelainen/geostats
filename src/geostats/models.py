@@ -1,16 +1,9 @@
 from datetime import datetime
-from enum import StrEnum
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Text
-from sqlalchemy import Enum as SAEnum
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from geostats.db import Base
-
-
-class GameMode(StrEnum):
-    DUELS = "duels"
-    TEAM_DUELS = "team_duels"
 
 
 class Account(Base):
@@ -18,11 +11,38 @@ class Account(Base):
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     nick: Mapped[str] = mapped_column(Text)
-    country_code: Mapped[str | None] = mapped_column(Text)
+    country_code: Mapped[str | None] = mapped_column(Text, default=None)
+    level: Mapped[int | None] = mapped_column(Integer, default=None)
+    is_pro: Mapped[bool] = mapped_column(Boolean, default=False)
+    pin_url: Mapped[str | None] = mapped_column(Text, default=None)
     tracked: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    last_polled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    last_error: Mapped[str | None] = mapped_column(Text)
+    last_polled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    last_error: Mapped[str | None] = mapped_column(Text, default=None)
+
+    def __init__(
+        self,
+        id: str,
+        nick: str,
+        created_at: datetime,
+        country_code: str | None = None,
+        level: int | None = None,
+        is_pro: bool = False,
+        pin_url: str | None = None,
+        tracked: bool = True,
+        last_polled_at: datetime | None = None,
+        last_error: str | None = None,
+    ):
+        self.id = id
+        self.nick = nick
+        self.created_at = created_at
+        self.country_code = country_code
+        self.level = level
+        self.is_pro = is_pro
+        self.pin_url = pin_url
+        self.tracked = tracked
+        self.last_polled_at = last_polled_at
+        self.last_error = last_error
 
 
 class RatingSnapshot(Base):
@@ -31,12 +51,25 @@ class RatingSnapshot(Base):
     account_id: Mapped[str] = mapped_column(
         Text, ForeignKey("accounts.id", ondelete="CASCADE"), primary_key=True
     )
-    mode: Mapped[GameMode] = mapped_column(
-        SAEnum(GameMode, values_callable=lambda obj: [e.value for e in obj], native_enum=False),
-        primary_key=True,
-    )
-    captured_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), primary_key=True
-    )
-    rating: Mapped[int] = mapped_column(Integer)
+    captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), primary_key=True)
+
+    rating: Mapped[int | None] = mapped_column(Integer)
+    division_number: Mapped[int | None] = mapped_column(Integer)
+    division_name: Mapped[str | None] = mapped_column(Text)
+
+    rating_moving: Mapped[int | None] = mapped_column(Integer)
+    rating_nomove: Mapped[int | None] = mapped_column(Integer)
+    rating_nmpz: Mapped[int | None] = mapped_column(Integer)
+
+    win_streak: Mapped[int | None] = mapped_column(Integer)
+    guessed_first_rate: Mapped[float | None] = mapped_column(Float)
+
     games_played: Mapped[int | None] = mapped_column(Integer)
+    games_won: Mapped[int | None] = mapped_column(Integer)
+    avg_guess_distance_km: Mapped[float | None] = mapped_column(Float)
+
+    position_overall: Mapped[int | None] = mapped_column(Integer)
+    position_moving: Mapped[int | None] = mapped_column(Integer)
+    position_nomove: Mapped[int | None] = mapped_column(Integer)
+    position_nmpz: Mapped[int | None] = mapped_column(Integer)
+    position_country: Mapped[int | None] = mapped_column(Integer)
