@@ -1,0 +1,25 @@
+name: Poll Full Leaderboard
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run full poll
+        run: uv run geostats poll-full
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          GEOGUESSR_NCFA_COOKIE: ${{ secrets.GEOGUESSR_NCFA_COOKIE }}
