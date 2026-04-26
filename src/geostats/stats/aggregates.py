@@ -3,17 +3,11 @@ from datetime import datetime, timedelta, timezone
 from typing import Literal
 
 from geostats.models import Account, RatingSnapshot
+from geostats.stats import _FIELD_ATTR
 
 _MIN_SNAPS_FOR_AVG = 2
 
 RATING_FIELDS = ("overall", "moving", "nomove", "nmpz")
-
-_FIELD_ATTR: dict[str, str] = {
-    "overall": "rating",
-    "moving": "rating_moving",
-    "nomove": "rating_nomove",
-    "nmpz": "rating_nmpz",
-}
 
 
 @dataclass(frozen=True, slots=True)
