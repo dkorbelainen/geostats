@@ -27,7 +27,7 @@ async def discover_leaderboard(client: GeoClient, limit: int = 100) -> list[str]
     return all_ids
 
 
-async def poll_account(client: GeoClient, account_id: str, delay: float = 1.5) -> dict:
+async def poll_account(client: GeoClient, account_id: str, delay: float = 1.5) -> dict[str, object]:
     progress = await client.get_ranked_progress(account_id)
     await asyncio.sleep(delay)
     stats = await client.get_user_stats(account_id)
