@@ -1,0 +1,117 @@
+from __future__ import annotations
+
+import httpx
+from pydantic import BaseModel, ConfigDict, Field
+
+_BASE = "https://www.geoguessr.com"
+
+
+class UserInfo(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str
+    nick: str
+    country_code: str | None = Field(None, alias="countryCode")
+    is_pro: bool = Field(False, alias="isProUser")
+    level: int | None = None
+    pin_url: str | None = None
+
+    @classmethod
+    def from_response(cls, data: dict[str, object]) -> UserInfo:
+        pin: dict[str, object] = data.get("pin") or {}  # type: ignore[assignment]
+        progress: dict[str, object] = data.get("progress") or {}  # type: ignore[assignment]
+        return cls(
+            id=data["id"],
+            nick=data["nick"],
+            countryCode=data.get("countryCode"),
+            isProUser=data.get("isProUser", False),
+            level=progress.get("level"),
+            pin_url=pin.get("url"),
+        )
+
+
+class GameModeRatings(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    moving: int | None = Field(None, alias="Standardduels")
+    nomove: int | None = Field(None, alias="Nomoveduels")
+    nmpz: int | None = Field(None, alias="Nmpzduels")
+
+
+class RankedProgress(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    rating: int | None = None
+    division_number: int | None = Field(None, alias="divisionNumber")
+    division_name: str | None = Field(None, alias="divisionName")
+    win_streak: int | None = Field(None, alias="winStreak")
+    guessed_first_rate: float | None = Field(None, alias="guessedFirstRate")
+    game_mode_ratings: GameModeRatings | None = Field(None, alias="gameModeRatings")
+
+
+class DuelStats(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    num_games_played: int = Field(0, alias="numGamesPlayed")
+    num_wins: int = Field(0, alias="numWins")
+    win_ratio: float = Field(0.0, alias="winRatio")
+    avg_guess_distance: float = Field(0.0, alias="avgGuessDistance")
+
+
+class UserStats(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    duels_total: DuelStats = Field(default_factory=DuelStats, alias="duelsTotal")
+
+
+class SearchResult(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    user_id: str = Field(alias="userId")
+    nick: str
+
+
+class GeoClient:
+    def __init__(self, ncfa_cookie: str) -> None:
+        self._client = httpx.AsyncClient(
+            base_url=_BASE,
+            headers={"Cookie": f"_ncfa={ncfa_cookie}"},
+            timeout=30.0,
+        )
+
+    async def __aenter__(self) -> GeoClient:
+        return self
+
+    async def __aexit__(self, *_: object) -> None:
+        await self._client.aclose()
+
+    async def get_user_info(self, user_id: str) -> UserInfo:
+        r = await self._client.get(f"/api/v3/users/{user_id}")
+        r.raise_for_status()
+        return UserInfo.from_response(r.json())
+
+    async def get_ranked_progress(self, user_id: str) -> RankedProgress:
+        r = await self._client.get(f"/api/v4/ranked-system/progress/{user_id}")
+        r.raise_for_status()
+        return RankedProgress.model_validate(r.json())
+
+    async def get_user_stats(self, user_id: str) -> UserStats:
+        r = await self._client.get(f"/api/v4/stats/users/{user_id}")
+        r.raise_for_status()
+        return UserStats.model_validate(r.json())
+
+    async def get_leaderboard_page(self, offset: int, limit: int = 100) -> list[str]:
+        r = await self._client.get(
+            "/api/v4/ranked-system/ratings",
+            params={"offset": offset, "limit": limit},
+        )
+        r.raise_for_status()
+        return [entry["userId"] for entry in r.json()]
+
+    async def search_user(self, nick: str) -> list[SearchResult]:
+        r = await self._client.get("/api/v3/search/user", params={"q": nick})
+        r.raise_for_status()
+        data = r.json()
+        if isinstance(data, list):
+            return [SearchResult.model_validate(u) for u in data]
+        return []
