@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from typing import Literal
 
 from geostats.models import Account, RatingSnapshot
 
@@ -21,7 +22,10 @@ class Record:
     captured_at: datetime
 
 
-def current_rating(snaps: list[RatingSnapshot], field: str) -> int | None:
+# All functions below require `snaps` sorted ascending by `captured_at`.
+def current_rating(
+    snaps: list[RatingSnapshot], field: Literal["overall", "moving", "nomove", "nmpz"]
+) -> int | None:
     attr = _FIELD_ATTR[field]
     for snap in reversed(snaps):
         v: int | None = getattr(snap, attr)
@@ -32,7 +36,7 @@ def current_rating(snaps: list[RatingSnapshot], field: str) -> int | None:
 
 def delta_over_period(
     snaps: list[RatingSnapshot],
-    field: str,
+    field: Literal["overall", "moving", "nomove", "nmpz"],
     *,
     now: datetime,
     window: timedelta,
@@ -58,7 +62,9 @@ def delta_over_period(
     return latest - at_cutoff
 
 
-def record(snaps: list[RatingSnapshot], field: str) -> Record | None:
+def record(
+    snaps: list[RatingSnapshot], field: Literal["overall", "moving", "nomove", "nmpz"]
+) -> Record | None:
     attr = _FIELD_ATTR[field]
     best: Record | None = None
     for snap in snaps:
@@ -70,7 +76,7 @@ def record(snaps: list[RatingSnapshot], field: str) -> Record | None:
 
 def average_rate_per_week(
     snaps: list[RatingSnapshot],
-    field: str,
+    field: Literal["overall", "moving", "nomove", "nmpz"],
     *,
     now: datetime,
     window: timedelta,
@@ -116,11 +122,24 @@ def summarize_profile(account: Account, snaps: list[RatingSnapshot]) -> ProfileS
     return ProfileSummary(
         account=account,
         snaps=snaps,
-        current={f: current_rating(snaps, f) for f in RATING_FIELDS},
-        delta_7d={f: delta_over_period(snaps, f, now=now, window=w7) for f in RATING_FIELDS},
-        delta_30d={f: delta_over_period(snaps, f, now=now, window=w30) for f in RATING_FIELDS},
-        record={f: record(snaps, f) for f in RATING_FIELDS},
+        current={
+            f: current_rating(snaps, f)  # type: ignore[arg-type]
+            for f in RATING_FIELDS
+        },
+        delta_7d={
+            f: delta_over_period(snaps, f, now=now, window=w7)  # type: ignore[arg-type]
+            for f in RATING_FIELDS
+        },
+        delta_30d={
+            f: delta_over_period(snaps, f, now=now, window=w30)  # type: ignore[arg-type]
+            for f in RATING_FIELDS
+        },
+        record={
+            f: record(snaps, f)  # type: ignore[arg-type]
+            for f in RATING_FIELDS
+        },
         avg_per_week_30d={
-            f: average_rate_per_week(snaps, f, now=now, window=w30) for f in RATING_FIELDS
+            f: average_rate_per_week(snaps, f, now=now, window=w30)  # type: ignore[arg-type]
+            for f in RATING_FIELDS
         },
     )
