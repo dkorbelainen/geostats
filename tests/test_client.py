@@ -2,7 +2,7 @@ import httpx
 import pytest
 import respx
 
-from geostats.client import GeoClient, RankedProgress, UserInfo, UserStats
+from geostats.client import GeoClient
 
 _BASE = "https://www.geoguessr.com"
 

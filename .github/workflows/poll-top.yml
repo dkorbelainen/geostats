@@ -1,0 +1,26 @@
+name: Poll Top 2000
+
+on:
+  schedule:
+    - cron: "0 */12 * * *"
+  workflow_dispatch:
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run top-2000 poll
+        run: uv run geostats poll-top --limit 2000
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          GEOGUESSR_NCFA_COOKIE: ${{ secrets.GEOGUESSR_NCFA_COOKIE }}
