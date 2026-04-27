@@ -19,6 +19,7 @@ class Account(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     last_polled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     last_error: Mapped[str | None] = mapped_column(Text, default=None)
+    lookup_count: Mapped[int] = mapped_column(Integer, server_default="0")
 
     def __init__(
         self,
@@ -32,6 +33,7 @@ class Account(Base):
         tracked: bool = True,
         last_polled_at: datetime | None = None,
         last_error: str | None = None,
+        lookup_count: int = 0,
     ):
         self.id = id
         self.nick = nick
@@ -43,6 +45,7 @@ class Account(Base):
         self.tracked = tracked
         self.last_polled_at = last_polled_at
         self.last_error = last_error
+        self.lookup_count = lookup_count
 
 
 class RatingSnapshot(Base):

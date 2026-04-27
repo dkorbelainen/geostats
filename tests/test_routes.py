@@ -57,6 +57,13 @@ def test_landing_contains_geostats(client: TestClient) -> None:
     assert "GeoStats" in r.text
 
 
+def test_account_has_lookup_count(db: Session) -> None:
+    acc = _account()
+    db.add(acc)
+    db.flush()
+    assert acc.lookup_count == 0
+
+
 # ── /lookup ───────────────────────────────────────────────────────────────────
 
 def test_lookup_valid_url_redirects_and_creates_account(
