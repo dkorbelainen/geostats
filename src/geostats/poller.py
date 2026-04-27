@@ -89,7 +89,15 @@ def _upsert_accounts(ids: list[str]) -> set[str]:
 async def _run_poll(
     client: GeoClient, account_ids: list[str], delay: float, fetch_info_ids: set[str]
 ) -> None:
-    for account_id in account_ids:
+    ids = list(account_ids)
+    random.shuffle(ids)
+    next_break = random.randint(30, 60)
+    for i, account_id in enumerate(ids):
+        if i == next_break:
+            pause = random.uniform(45, 120)
+            log.debug("session pause %.0fs after %d accounts", pause, i)
+            await asyncio.sleep(pause)
+            next_break += random.randint(30, 60)
         try:
             snapshot = await poll_account(client, account_id, delay=delay)
             fetch_profile = account_id in fetch_info_ids
