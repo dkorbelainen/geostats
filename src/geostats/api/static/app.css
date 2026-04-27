@@ -19,6 +19,14 @@ body {
   font-family: system-ui, -apple-system, sans-serif;
   font-size: 14px;
 }
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background: url('/static/sky2.jpg') center/cover no-repeat;
+  opacity: 0.07;
+  z-index: -1;
+  pointer-events: none;
+}
 
 /* ── Landing ── */
 .landing { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 40px; padding: 40px 16px; }
@@ -59,6 +67,13 @@ body {
   font-weight: 800; font-size: 16px; letter-spacing: .04em; color: #fff; text-decoration: none;
 }
 .nav-sub { color: rgba(255,255,255,.35); font-size: 12px; }
+.share-btn {
+  background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.18);
+  border-radius: 6px; color: rgba(255,255,255,.6); font-size: 11px;
+  padding: 4px 10px; cursor: pointer; transition: background .15s, color .15s;
+}
+.share-btn:hover { background: rgba(255,255,255,.16); color: rgba(255,255,255,.9); }
+.share-btn.copied { color: var(--green); border-color: var(--green); }
 .header { display: flex; align-items: center; gap: 16px; }
 .avatar-pin {
   width: 56px; height: 56px; border-radius: 50%;
@@ -134,6 +149,7 @@ body {
 .mode-rating { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
 .mode-delta { font-size: 11px; }
 .mode-rank { font-size: 10px; color: var(--text-muted); margin-top: 4px; }
+.mode-spark { width: 100%; height: 20px; display: block; margin-top: 8px; }
 
 /* ── Stats grid ── */
 .section-label {
