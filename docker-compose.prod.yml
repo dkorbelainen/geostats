@@ -1,6 +1,6 @@
 services:
   db:
-    image: timescale/timescaledb:latest-pg16
+    image: postgres:16-alpine
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -34,6 +34,22 @@ services:
       GEOGUESSR_NCFA_COOKIE: ${GEOGUESSR_NCFA_COOKIE:-}
     ports:
       - "127.0.0.1:8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  poller:
+    build: .
+    restart: unless-stopped
+    command: >
+      sh -c "while true; do
+        geostats poll-top --limit 2000;
+        sleep 21600;
+      done"
+    environment:
+      DATABASE_URL: >-
+        postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db/${POSTGRES_DB}
+      GEOGUESSR_NCFA_COOKIE: ${GEOGUESSR_NCFA_COOKIE}
     depends_on:
       migrate:
         condition: service_completed_successfully
