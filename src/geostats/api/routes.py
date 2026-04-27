@@ -141,9 +141,9 @@ async def lookup(
             status_code=400,
         )
 
-    now = datetime.now(tz=UTC)
     account = db.get(Account, user_id)
     if account is None:
+        now = datetime.now(tz=UTC)
         account = Account(id=user_id, nick=nick or user_id, tracked=True, created_at=now)
         db.add(account)
     elif nick is not None:
