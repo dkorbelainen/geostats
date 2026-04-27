@@ -62,8 +62,10 @@ def _upsert_accounts(ids: list[str]) -> set[str]:
         new_ids = {uid for uid in unique_ids if uid not in existing}
         if unique_ids:
             db.execute(
-                pg_insert(Account)
-                .values([
+                pg_insert(Account).on_conflict_do_update(
+                    index_elements=["id"], set_={"tracked": True}
+                ),
+                [
                     {
                         "id": uid, "nick": uid, "country_code": None, "level": None,
                         "is_pro": False, "pin_url": None, "tracked": True,
@@ -71,8 +73,7 @@ def _upsert_accounts(ids: list[str]) -> set[str]:
                         "lookup_count": 0,
                     }
                     for uid in unique_ids
-                ])
-                .on_conflict_do_update(index_elements=["id"], set_={"tracked": True})
+                ],
             )
             db.query(Account).filter(
                 Account.id.notin_(unique_ids), Account.tracked == True  # noqa: E712
