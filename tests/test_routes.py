@@ -1,18 +1,28 @@
 from datetime import datetime, timedelta, timezone
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from geostats.api.app import create_app
-from geostats.api.deps import get_db
+from geostats.api.deps import get_db, get_geo_client
+from geostats.client import GeoClient, SearchResult
 from geostats.models import Account, RatingSnapshot
 
 
 @pytest.fixture
-def client(db: Session) -> TestClient:
+def mock_geo_client() -> AsyncMock:
+    mock = AsyncMock(spec=GeoClient)
+    mock.search_user.return_value = []
+    return mock
+
+
+@pytest.fixture
+def client(db: Session, mock_geo_client: AsyncMock) -> TestClient:
     app = create_app()
     app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_geo_client] = lambda: mock_geo_client
     return TestClient(app)
 
 

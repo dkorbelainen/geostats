@@ -123,3 +123,13 @@ async def test_search_user(client):
     assert len(result) == 1
     assert result[0].nick == "TestPlayer"
     assert result[0].user_id == "abc123"
+
+
+@pytest.mark.asyncio
+async def test_search_user_empty(client):
+    with respx.mock:
+        respx.get(f"{_BASE}/api/v3/search/user").mock(
+            return_value=httpx.Response(200, json=[])
+        )
+        result = await client.search_user("nobody")
+    assert result == []
