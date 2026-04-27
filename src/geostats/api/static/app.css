@@ -21,7 +21,7 @@ body {
 }
 
 /* ── Landing ── */
-.landing { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+.landing { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 40px; padding: 40px 16px; }
 .landing-inner { text-align: center; max-width: 400px; padding: 24px; }
 .site-logo { font-size: 32px; font-weight: 800; margin-bottom: 8px; letter-spacing: .02em; }
 .tagline { color: var(--text-secondary); font-size: 14px; margin-bottom: 32px; }
@@ -167,7 +167,6 @@ body {
 .hl-date { color: var(--text-muted); font-size: 11px; }
 
 /* ── Landing popular section ── */
-.landing { flex-direction: column; gap: 40px; padding: 40px 16px; }
 .popular { width: 100%; max-width: 680px; }
 .popular-label {
   color: var(--text-secondary); font-size: 11px; text-transform: uppercase;
