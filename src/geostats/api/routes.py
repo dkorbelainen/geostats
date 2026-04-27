@@ -120,8 +120,30 @@ async def healthz() -> dict[str, str]:
 
 
 @router.get("/")
-async def landing(request: Request) -> Response:
-    return templates.TemplateResponse(request, "landing.html")
+async def landing(
+    request: Request, db: Session = Depends(get_db)  # noqa: B008
+) -> Response:
+    latest_snap_sq = (
+        db.query(func.max(RatingSnapshot.captured_at))
+        .filter(RatingSnapshot.account_id == Account.id)
+        .correlate(Account)
+        .scalar_subquery()
+    )
+    top_profiles = (
+        db.query(Account, RatingSnapshot)
+        .join(
+            RatingSnapshot,
+            (RatingSnapshot.account_id == Account.id)
+            & (RatingSnapshot.captured_at == latest_snap_sq),
+        )
+        .filter(Account.last_polled_at.isnot(None))
+        .order_by(Account.lookup_count.desc())
+        .limit(6)
+        .all()
+    )
+    return templates.TemplateResponse(
+        request, "landing.html", {"top_profiles": top_profiles}
+    )
 
 
 @router.post("/lookup")

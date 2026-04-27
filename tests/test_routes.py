@@ -67,6 +67,24 @@ def test_landing_contains_geostats(client: TestClient) -> None:
     assert "GeoStats" in r.text
 
 
+def test_landing_shows_popular_profiles(client: TestClient, db: Session) -> None:
+    acc = Account(
+        id="abcdefghij1234567890",
+        nick="PopularPlayer",
+        created_at=_now(),
+        last_polled_at=_now(),
+        lookup_count=5,
+    )
+    db.add(acc)
+    db.flush()
+    db.add(_snap("abcdefghij1234567890", rating=2500))
+    db.flush()
+    r = client.get("/")
+    assert r.status_code == 200
+    assert "PopularPlayer" in r.text
+    assert "Most searched" in r.text
+
+
 def test_account_has_lookup_count(db: Session) -> None:
     acc = _account()
     db.add(acc)
