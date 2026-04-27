@@ -178,7 +178,7 @@ body::before {
   padding: 8px 0; border-bottom: 1px solid var(--border);
 }
 .hl-row:last-child { border-bottom: none; }
-.hl-name { color: var(--text-secondary); font-size: 12px; }
+.hl-name { color: var(--text-secondary); font-size: 12px; min-width: 5.5rem; }
 .hl-val { font-weight: 600; font-size: 13px; }
 .hl-date { color: var(--text-muted); font-size: 11px; }
 
@@ -197,11 +197,17 @@ body::before {
   transition: border-color .15s;
 }
 .pop-card:hover { border-color: var(--amethyst-dim); }
-.pop-avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; }
+.pop-avatar {
+  width: 40px; height: 40px; border-radius: 50%; object-fit: cover;
+  border: 2px solid rgba(167,139,250,.35);
+  box-shadow: 0 0 0 3px rgba(167,139,250,.1);
+}
 .pop-avatar-ph {
   width: 40px; height: 40px; border-radius: 50%; display: flex;
   align-items: center; justify-content: center;
   background: var(--surface-raised); font-size: 18px;
+  border: 2px solid rgba(167,139,250,.35);
+  box-shadow: 0 0 0 3px rgba(167,139,250,.1);
 }
 .pop-nick { font-weight: 600; font-size: 13px; text-align: center; }
 .pop-country { color: var(--text-secondary); font-size: 11px; }
@@ -221,6 +227,61 @@ body::before {
 .fc-rating { font-size: 12px; color: var(--text-secondary); }
 .fc-conf { font-size: 11px; color: var(--text-muted); }
 .fc-empty { font-size: 12px; color: var(--text-muted); padding: 8px 0; }
+
+/* ── Site footer ── */
+.site-footer {
+  position: fixed; bottom: 14px; left: 0; right: 0;
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none; z-index: 50;
+}
+.footer-by {
+  position: absolute; left: 18px;
+  font-size: 11px; color: var(--text-muted);
+  pointer-events: all;
+}
+.footer-by a { color: var(--text-muted); text-decoration: none; }
+.footer-by a:hover { color: var(--text-secondary); }
+.footer-gh {
+  color: var(--text-muted); pointer-events: all;
+  transition: color .15s;
+}
+.footer-gh:hover { color: var(--text-secondary); }
+.footer-gh svg { width: 17px; height: 17px; display: block; }
+
+/* ── Badge tiers ── */
+.badge-champion {
+  background: rgba(167,139,250,.18); border-color: rgba(167,139,250,.4);
+  color: var(--amethyst);
+}
+.badge-master {
+  background: rgba(224,136,136,.15); border-color: rgba(224,136,136,.35);
+  color: var(--red);
+}
+.badge-silver {
+  background: rgba(210,210,230,.1); border-color: rgba(210,210,230,.3);
+  color: #cccce0;
+}
+.badge-bronze {
+  background: rgba(180,130,90,.12); border-color: rgba(180,130,90,.3);
+  color: #c49a6c;
+}
+
+/* ── Nick autocomplete ── */
+.lookup-wrap { position: relative; margin-bottom: 10px; }
+.lookup-wrap .lookup-input { margin-bottom: 0; }
+.autocomplete-list {
+  display: none; position: absolute; top: calc(100% + 2px); left: 0; right: 0;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; list-style: none; z-index: 20;
+  overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,.4);
+}
+.autocomplete-list.open { display: block; }
+.autocomplete-list li {
+  padding: 10px 16px; cursor: pointer; font-size: 13px;
+  color: var(--text-primary); transition: background .1s;
+}
+.autocomplete-list li:hover { background: var(--surface-raised); }
+.autocomplete-list li:not(:last-child) { border-bottom: 1px solid var(--border); }
 
 /* ── Chart tooltip ── */
 #chart-tooltip {

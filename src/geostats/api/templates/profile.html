@@ -20,7 +20,7 @@
         {% if acc.pin_url %}
         <img class="avatar-pin" src="{{ acc.pin_url }}" alt="">
         {% else %}
-        <div class="avatar-pin avatar-placeholder">🧭</div>
+        <div class="avatar-pin avatar-placeholder">🌐</div>
         {% endif %}
         <div class="header-info">
           <h1>{{ acc.nick }}</h1>
@@ -31,7 +31,8 @@
             {% if not collecting and summary.snaps %}
             {% set latest = summary.snaps[-1] %}
             {% if latest.division_name %}
-            <span class="badge">{{ latest.division_name }}</span>
+            {% set dn = latest.division_name | lower %}
+            <span class="badge{% if 'champion' in dn %} badge-champion{% elif 'master' in dn %} badge-master{% elif 'gold' in dn %}{% elif 'silver' in dn %} badge-silver{% elif 'bronze' in dn %} badge-bronze{% endif %}">{{ latest.division_name }}</span>
             {% endif %}
             {% endif %}
             {% if acc.level %}<span class="meta-txt">lvl {{ acc.level }}</span>{% endif %}

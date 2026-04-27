@@ -82,12 +82,12 @@ def _upsert_accounts(ids: list[str]) -> set[str]:
 
 
 async def _run_poll(
-    client: GeoClient, account_ids: list[str], delay: float, new_ids: set[str]
+    client: GeoClient, account_ids: list[str], delay: float, fetch_info_ids: set[str]
 ) -> None:
     for account_id in account_ids:
         try:
             snapshot = await poll_account(client, account_id, delay=delay)
-            fetch_profile = account_id in new_ids
+            fetch_profile = account_id in fetch_info_ids
             if fetch_profile:
                 info = await client.get_user_info(account_id)
                 await asyncio.sleep(delay)
@@ -130,7 +130,13 @@ async def run_full_poll(ncfa_cookie: str, delay: float) -> None:
         log.info("discovered %d rated players", len(ids))
         new_ids = _upsert_accounts(ids)
         unique_ids = list(dict.fromkeys(ids))
-        await _run_poll(client, unique_ids, delay, new_ids)
+        with session_scope() as db:
+            no_pin = {
+                row.id for row in db.query(Account.id)
+                .filter(Account.id.in_(unique_ids), Account.pin_url.is_(None))
+                .all()
+            }
+        await _run_poll(client, unique_ids, delay, new_ids | no_pin)
 
     with session_scope() as db:
         compute_ranks(db)
@@ -152,7 +158,7 @@ async def run_new_poll(ncfa_cookie: str, delay: float) -> None:
         return
 
     async with GeoClient(ncfa_cookie) as client:
-        await _run_poll(client, new_ids, delay, set(new_ids))
+        await _run_poll(client, new_ids, delay, set(new_ids))  # all new → fetch info
 
     with session_scope() as db:
         compute_ranks(db)
@@ -184,8 +190,15 @@ async def run_top_poll(ncfa_cookie: str, delay: float, limit: int) -> None:
     all_ids = list(dict.fromkeys(top_ids + list(lookup_ids)))
     log.info("top-%d poll: %d accounts (%d from lookups)", limit, len(all_ids), len(lookup_ids))
 
+    with session_scope() as db:
+        no_pin = {
+            row.id for row in db.query(Account.id)
+            .filter(Account.id.in_(all_ids), Account.pin_url.is_(None))
+            .all()
+        }
+
     async with GeoClient(ncfa_cookie) as client:
-        await _run_poll(client, all_ids, delay, set())
+        await _run_poll(client, all_ids, delay, no_pin)
 
     with session_scope() as db:
         compute_ranks(db)
