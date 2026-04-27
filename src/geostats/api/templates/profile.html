@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+{% block title %}
+  {% if collecting %}{{ account.nick }}{% else %}{{ summary.account.nick }}{% endif %} — GeoStats
+{% endblock %}
+{% block body %}
+{% set acc = summary.account if not collecting else account %}
+<div class="page">
+
+  <div class="top-banner">
+    <div class="top-inner">
+      <nav class="nav">
+        <a class="nav-logo" href="/">GeoStats</a>
+        <span class="nav-sub">geoguessr tracker</span>
+      </nav>
+      <div class="header">
+        {% if acc.pin_url %}
+        <img class="avatar-pin" src="{{ acc.pin_url }}" alt="">
+        {% else %}
+        <div class="avatar-pin avatar-placeholder">🧭</div>
+        {% endif %}
+        <div class="header-info">
+          <h1>{{ acc.nick }}</h1>
+          <div class="header-meta">
+            {% if acc.country_code %}
+            <span class="meta-txt">{{ acc.country_code | country_flag }} {{ acc.country_code }}</span>
+            {% endif %}
+            {% if not collecting and summary.snaps %}
+            {% set latest = summary.snaps[-1] %}
+            {% if latest.division_name %}
+            <span class="badge">{{ latest.division_name }}</span>
+            {% endif %}
+            {% endif %}
+            {% if acc.level %}<span class="meta-txt">lvl {{ acc.level }}</span>{% endif %}
+            {% if not collecting and acc.last_polled_at %}
+            <span class="meta-txt">updated {{ acc.last_polled_at | time_ago }}</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="content">
+  {% if collecting %}
+    <div class="collecting-msg">
+      <h2>Collecting data…</h2>
+      <p>{{ acc.nick }} has been added to tracking. Stats appear after the next poll (up to 12 h).</p>
+    </div>
+  {% else %}
+    {% set latest = summary.snaps[-1] if summary.snaps else none %}
+
+    <div class="hero">
+      <div class="hero-label">Overall Rating</div>
+      <div class="hero-rating">{{ summary.current["overall"] | fmt_rating }}</div>
+      <div class="hero-deltas">
+        {% set d7 = summary.delta_7d["overall"] %}
+        {% set d30 = summary.delta_30d["overall"] %}
+        <span class="{{ 'dp' if d7 is not none and d7 > 0 else 'dn' if d7 is not none and d7 < 0 else 'dm' }}">
+          {{ d7 | fmt_delta }} this week
+        </span>
+        <span class="{{ 'dp' if d30 is not none and d30 > 0 else 'dn' if d30 is not none and d30 < 0 else 'dm' }}">
+          {{ d30 | fmt_delta }} this month
+        </span>
+      </div>
+      {% if latest %}
+      <div class="hero-rank">
+        {% if latest.position_overall %}#<b>{{ latest.position_overall }}</b> worldwide{% endif %}
+        {% if latest.position_country %}&nbsp;·&nbsp; #<b>{{ latest.position_country }}</b> in {{ acc.country_code }}{% endif %}
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-header">
+        <span class="chart-mode-label">Showing: <span id="chart-mode-name">Overall</span></span>
+        <div class="range-btns">
+          <button class="rbtn" data-range="7d">7d</button>
+          <button class="rbtn active" data-range="30d">30d</button>
+          <button class="rbtn" data-range="90d">90d</button>
+          <button class="rbtn" data-range="all">All</button>
+        </div>
+      </div>
+      <svg id="chart-svg" viewBox="0 0 600 120" width="100%" height="120"
+           preserveAspectRatio="none" style="display:block">
+        <defs>
+          <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#a78bfa" stop-opacity=".25"/>
+            <stop offset="100%" stop-color="#a78bfa" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        <path id="chart-fill" fill="url(#grad)"/>
+        <path id="chart-line" fill="none" stroke="#a78bfa" stroke-width="2.5"
+              stroke-linejoin="round" stroke-linecap="round"/>
+      </svg>
+    </div>
+
+    <p class="mode-hint">Click a mode to switch chart &amp; stats</p>
+    <div class="mode-grid">
+      {% for mode_key, mode_label in [("moving","Moving"),("nomove","No Move"),("nmpz","NMPZ")] %}
+      {% set d7 = summary.delta_7d[mode_key] %}
+      <div class="mode-card" data-mode="{{ mode_key }}"
+           onclick="selectMode(this,'{{ mode_label }}','{{ mode_key }}')">
+        <div class="mode-label">{{ mode_label }}</div>
+        <div class="mode-rating">{{ summary.current[mode_key] | fmt_rating }}</div>
+        <div class="mode-delta {{ 'dp' if d7 is not none and d7 > 0 else 'dn' if d7 is not none and d7 < 0 else 'dm' }}">
+          {{ d7 | fmt_delta }} (7d)
+        </div>
+        <div class="mode-rank">
+          {% if latest %}{{ getattr(latest, 'position_' ~ mode_key) | fmt_rank }} worldwide{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <p class="section-label" id="stats-label">Stats — Overall</p>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Games played</div>
+        <div class="stat-value">{{ latest.games_played | fmt_rating if latest else "—" }}</div>
+        <div class="stat-sub">
+          {% if latest and latest.games_played and latest.games_won %}
+          {{ latest.games_won }} won
+          · {{ ((latest.games_won / latest.games_played) * 100) | round(1) }}% win rate
+          {% else %}—{% endif %}
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Win streak</div>
+        <div class="stat-value">{{ latest.win_streak if latest and latest.win_streak is not none else "—" }}</div>
+        <div class="stat-sub">current streak</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Avg guess distance</div>
+        <div class="stat-value">
+          {% if latest and latest.avg_guess_distance_km %}
+          {{ latest.avg_guess_distance_km | round | int }} km
+          {% else %}—{% endif %}
+        </div>
+        <div class="stat-sub">per guess</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">First guess rate</div>
+        <div class="stat-value">
+          {% if latest and latest.guessed_first_rate is not none %}
+          {{ (latest.guessed_first_rate * 100) | round(1) }}%
+          {% else %}—{% endif %}
+        </div>
+        <div class="stat-sub">guessed flag first</div>
+      </div>
+    </div>
+
+    <p class="section-label">All-time highs</p>
+    <div class="highlights">
+      {% for mode_key, mode_label in [("overall","Overall"),("moving","Moving"),("nomove","No Move"),("nmpz","NMPZ")] %}
+      {% set rec = summary.record[mode_key] %}
+      <div class="hl-row">
+        <span class="hl-name">{{ mode_label }}</span>
+        <span class="hl-val">{{ rec.value | fmt_rating if rec else "—" }}</span>
+        <span class="hl-date">{{ rec.captured_at.date().isoformat() if rec else "" }}</span>
+      </div>
+      {% endfor %}
+    </div>
+
+  {% endif %}
+  </div>
+</div>
+
+{% if not collecting %}
+<script>
+const PROFILE_ID = {{ summary.account.id | tojson }};
+let currentMode = "overall";
+let currentRange = "30d";
+const W = 600, H = 120, PAD = 8;
+
+function smooth(pts) {
+  if (pts.length < 2) return "";
+  let d = `M${pts[0][0]},${pts[0][1]}`;
+  for (let i = 1; i < pts.length; i++) {
+    const [x0, y0] = pts[i - 1], [x1, y1] = pts[i];
+    const cx = (x0 + x1) / 2;
+    d += ` C${cx},${y0} ${cx},${y1} ${x1},${y1}`;
+  }
+  return d;
+}
+
+function drawChart(points) {
+  const line = document.getElementById("chart-line");
+  const fill = document.getElementById("chart-fill");
+  if (!points.length) { line.setAttribute("d", ""); fill.setAttribute("d", ""); return; }
+  const values = points.map(p => p[1]);
+  const mn = Math.min(...values) - 30, mx = Math.max(...values) + 30;
+  const n = values.length;
+  const pts = values.map((v, i) => [
+    PAD + (n > 1 ? (i / (n - 1)) * (W - PAD * 2) : W / 2),
+    H - PAD - ((v - mn) / (mx - mn || 1)) * (H - PAD * 2)
+  ]);
+  const linePath = smooth(pts);
+  const fillPath = pts.length > 1
+    ? linePath + ` L${pts[pts.length - 1][0]},${H} L${pts[0][0]},${H} Z`
+    : "";
+  line.setAttribute("d", linePath);
+  fill.setAttribute("d", fillPath);
+}
+
+async function fetchAndDraw(mode, range) {
+  try {
+    const r = await fetch(`/api/profile/${PROFILE_ID}/series?mode=${mode}&range=${range}`);
+    if (!r.ok) return;
+    const data = await r.json();
+    drawChart(data.points);
+  } catch (_) {}
+}
+
+function selectMode(card, label, mode) {
+  document.querySelectorAll(".mode-card").forEach(c => c.classList.remove("active"));
+  card.classList.add("active");
+  currentMode = mode;
+  document.getElementById("chart-mode-name").textContent = label;
+  document.getElementById("stats-label").textContent = `Stats — ${label}`;
+  fetchAndDraw(currentMode, currentRange);
+}
+
+document.querySelectorAll(".rbtn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".rbtn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    currentRange = btn.dataset.range;
+    fetchAndDraw(currentMode, currentRange);
+  });
+});
+
+fetchAndDraw("overall", "30d");
+</script>
+{% endif %}
+{% endblock %}
