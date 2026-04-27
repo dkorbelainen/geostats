@@ -1,23 +1,33 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from geostats.api.app import create_app
-from geostats.api.deps import get_db
+from geostats.api.deps import get_db, get_geo_client
+from geostats.client import GeoClient, SearchResult
 from geostats.models import Account, RatingSnapshot
 
 
 @pytest.fixture
-def client(db: Session) -> TestClient:
+def mock_geo_client() -> AsyncMock:
+    mock = AsyncMock(spec=GeoClient)
+    mock.search_user.return_value = []
+    return mock
+
+
+@pytest.fixture
+def client(db: Session, mock_geo_client: AsyncMock) -> TestClient:
     app = create_app()
     app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_geo_client] = lambda: mock_geo_client
     return TestClient(app)
 
 
 def _now() -> datetime:
-    return datetime.now(tz=timezone.utc)
+    return datetime.now(tz=UTC)
 
 
 def _account(
@@ -55,6 +65,31 @@ def test_landing_contains_geostats(client: TestClient) -> None:
     r = client.get("/")
     assert r.status_code == 200
     assert "GeoStats" in r.text
+
+
+def test_landing_shows_popular_profiles(client: TestClient, db: Session) -> None:
+    acc = Account(
+        id="abcdefghij1234567890",
+        nick="PopularPlayer",
+        created_at=_now(),
+        last_polled_at=_now(),
+        lookup_count=5,
+    )
+    db.add(acc)
+    db.flush()
+    db.add(_snap("abcdefghij1234567890", rating=2500))
+    db.flush()
+    r = client.get("/")
+    assert r.status_code == 200
+    assert "PopularPlayer" in r.text
+    assert "Most searched" in r.text
+
+
+def test_account_has_lookup_count(db: Session) -> None:
+    acc = _account()
+    db.add(acc)
+    db.flush()
+    assert acc.lookup_count == 0
 
 
 # ── /lookup ───────────────────────────────────────────────────────────────────
@@ -131,6 +166,18 @@ def test_profile_invalid_id_returns_404(client: TestClient) -> None:
     assert r.status_code == 404
 
 
+def test_profile_visit_increments_lookup_count(
+    client: TestClient, db: Session
+) -> None:
+    acc = _account(polled=True)
+    db.add(acc)
+    db.add(_snap("abcdefghij1234567890", rating=2000))
+    db.flush()
+    client.get("/profile/abcdefghij1234567890")
+    db.refresh(acc)
+    assert acc.lookup_count == 1
+
+
 # ── /api/profile/{id}/series ──────────────────────────────────────────────────
 
 def test_series_returns_points(client: TestClient, db: Session) -> None:
@@ -165,3 +212,39 @@ def test_series_invalid_mode_returns_422(client: TestClient, db: Session) -> Non
     db.flush()
     r = client.get("/api/profile/abcdefghij1234567890/series?mode=invalid")
     assert r.status_code == 422
+
+
+def test_lookup_by_nick_creates_account(
+    client: TestClient, db: Session, mock_geo_client: AsyncMock
+) -> None:
+    mock_geo_client.search_user.return_value = [
+        SearchResult(user_id="abcdefghij1234567890", nick="RealNick")
+    ]
+    r = client.post("/lookup", data={"profile": "RealNick"}, follow_redirects=False)
+    assert r.status_code == 303
+    assert r.headers["location"] == "/profile/abcdefghij1234567890"
+    acc = db.get(Account, "abcdefghij1234567890")
+    assert acc is not None
+    assert acc.nick == "RealNick"
+
+
+def test_lookup_unknown_nick_returns_400(client: TestClient) -> None:
+    # mock_geo_client already returns [] by default
+    r = client.post("/lookup", data={"profile": "unknownxyz"})
+    assert r.status_code == 400
+    assert "GeoStats" in r.text
+
+
+def test_lookup_increments_lookup_count(
+    client: TestClient, db: Session
+) -> None:
+    acc = _account()
+    db.add(acc)
+    db.flush()
+    client.post(
+        "/lookup",
+        data={"profile": "abcdefghij1234567890"},
+        follow_redirects=False,
+    )
+    db.refresh(acc)
+    assert acc.lookup_count == 1

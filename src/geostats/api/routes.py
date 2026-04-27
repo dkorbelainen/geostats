@@ -6,9 +6,11 @@ from typing import Literal
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from geostats.api.deps import get_db
+from geostats.api.deps import get_db, get_geo_client
+from geostats.client import GeoClient
 from geostats.models import Account, RatingSnapshot
 from geostats.stats.aggregates import summarize_profile
 from geostats.stats.series import get_series
@@ -80,6 +82,30 @@ def _time_ago(dt: object) -> str:
     return f"{diff // _SECS_DAY}d ago"
 
 
+async def resolve_profile(
+    value: str, db: Session, client: GeoClient
+) -> tuple[str, str | None]:
+    value = value.strip()
+    m = _URL_RE.search(value)
+    if m:
+        return m.group(1), None
+    if _ID_RE.match(value):
+        return value, None
+    account = (
+        db.query(Account).filter(func.lower(Account.nick) == value.lower()).first()
+    )
+    if account is not None:
+        return account.id, None
+    try:
+        results = await client.search_user(value)
+    except Exception:
+        raise LookupError("Search unavailable, try a profile URL") from None
+    if not results:
+        raise LookupError(f'No player found for "{value}"')
+    first = results[0]
+    return first.user_id, first.nick
+
+
 templates.env.filters["fmt_rating"] = _fmt_rating
 templates.env.filters["fmt_delta"] = _fmt_delta
 templates.env.filters["fmt_rank"] = _fmt_rank
@@ -94,8 +120,30 @@ async def healthz() -> dict[str, str]:
 
 
 @router.get("/")
-async def landing(request: Request) -> Response:
-    return templates.TemplateResponse(request, "landing.html")
+async def landing(
+    request: Request, db: Session = Depends(get_db)  # noqa: B008
+) -> Response:
+    latest_snap_sq = (
+        db.query(func.max(RatingSnapshot.captured_at))
+        .filter(RatingSnapshot.account_id == Account.id)
+        .correlate(Account)
+        .scalar_subquery()
+    )
+    top_profiles = (
+        db.query(Account, RatingSnapshot)
+        .join(
+            RatingSnapshot,
+            (RatingSnapshot.account_id == Account.id)
+            & (RatingSnapshot.captured_at == latest_snap_sq),
+        )
+        .filter(Account.last_polled_at.isnot(None))
+        .order_by(Account.lookup_count.desc())
+        .limit(6)
+        .all()
+    )
+    return templates.TemplateResponse(
+        request, "landing.html", {"top_profiles": top_profiles}
+    )
 
 
 @router.post("/lookup")
@@ -103,26 +151,27 @@ async def lookup(
     request: Request,
     profile: str = Form(...),
     db: Session = Depends(get_db),  # noqa: B008
+    client: GeoClient = Depends(get_geo_client),  # noqa: B008
 ) -> Response:
     try:
-        user_id = parse_user_id(profile)
-    except LookupError:
+        user_id, nick = await resolve_profile(profile, db, client)
+    except LookupError as exc:
         return templates.TemplateResponse(
             request,
             "landing.html",
-            {
-                "error": (
-                    "Invalid input. Paste a GeoGuessr profile URL"
-                    " or a 20–24 character user ID."
-                ),
-            },
+            {"error": str(exc), "top_profiles": []},
             status_code=400,
         )
 
-    if db.get(Account, user_id) is None:
+    account = db.get(Account, user_id)
+    if account is None:
         now = datetime.now(tz=UTC)
-        db.add(Account(id=user_id, nick=user_id, tracked=True, created_at=now))
-        db.commit()
+        account = Account(id=user_id, nick=nick or user_id, tracked=True, created_at=now)
+        db.add(account)
+    elif nick is not None:
+        account.nick = nick
+    account.lookup_count += 1
+    db.commit()
 
     return RedirectResponse(url=f"/profile/{user_id}", status_code=303)
 
@@ -141,6 +190,9 @@ async def profile_page(
     account = db.get(Account, user_id)
     if account is None:
         raise HTTPException(status_code=404)
+
+    account.lookup_count += 1
+    db.commit()
 
     if account.last_polled_at is None:
         return templates.TemplateResponse(
