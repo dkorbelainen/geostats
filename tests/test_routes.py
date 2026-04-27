@@ -248,3 +248,60 @@ def test_lookup_increments_lookup_count(
     )
     db.refresh(acc)
     assert acc.lookup_count == 1
+
+
+# ── /api/profile/{id}/forecast ────────────────────────────────────────────────
+
+def test_forecast_unknown_account_returns_404(client: TestClient) -> None:
+    r = client.get("/api/profile/abcdefghij1234567890/forecast")
+    assert r.status_code == 404
+
+
+def test_forecast_insufficient_data_returns_null_delta(
+    client: TestClient, db: Session
+) -> None:
+    db.add(_account(polled=True))
+    db.flush()
+    db.add(_snap("abcdefghij1234567890", days_ago=3, rating=2000))
+    db.add(_snap("abcdefghij1234567890", days_ago=1, rating=2050))
+    db.flush()
+    r = client.get("/api/profile/abcdefghij1234567890/forecast?horizon=7")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["predicted_delta"] is None
+    assert data["n_points"] == 2
+
+
+def test_forecast_with_enough_data_returns_prediction(
+    client: TestClient, db: Session
+) -> None:
+    db.add(_account(polled=True))
+    db.flush()
+    for i in range(10):
+        db.add(_snap("abcdefghij1234567890", days_ago=10 - i, rating=2000 + i * 30))
+    db.flush()
+    r = client.get("/api/profile/abcdefghij1234567890/forecast?horizon=7&mode=overall")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["horizon"] == 7
+    assert data["mode"] == "overall"
+    assert isinstance(data["predicted_delta"], int)
+    assert isinstance(data["predicted_rating"], int)
+    assert isinstance(data["confidence"], int)
+    assert data["n_points"] == 10
+
+
+def test_forecast_invalid_mode_returns_422(client: TestClient, db: Session) -> None:
+    db.add(_account(polled=True))
+    db.flush()
+    r = client.get("/api/profile/abcdefghij1234567890/forecast?mode=invalid")
+    assert r.status_code == 422
+
+
+def test_forecast_horizon_out_of_range_returns_422(
+    client: TestClient, db: Session
+) -> None:
+    db.add(_account(polled=True))
+    db.flush()
+    r = client.get("/api/profile/abcdefghij1234567890/forecast?horizon=999")
+    assert r.status_code == 422
