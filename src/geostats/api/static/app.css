@@ -165,3 +165,29 @@ body {
 .hl-name { color: var(--text-secondary); font-size: 12px; }
 .hl-val { font-weight: 600; font-size: 13px; }
 .hl-date { color: var(--text-muted); font-size: 11px; }
+
+/* ── Landing popular section ── */
+.landing { flex-direction: column; gap: 40px; padding: 40px 16px; }
+.popular { width: 100%; max-width: 680px; }
+.popular-label {
+  color: var(--text-secondary); font-size: 11px; text-transform: uppercase;
+  letter-spacing: .08em; margin-bottom: 12px;
+}
+.popular-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+@media (max-width: 480px) { .popular-grid { grid-template-columns: 1fr; } }
+.pop-card {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 16px 12px; text-decoration: none; color: var(--text-primary);
+  transition: border-color .15s;
+}
+.pop-card:hover { border-color: var(--amethyst-dim); }
+.pop-avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; }
+.pop-avatar-ph {
+  width: 40px; height: 40px; border-radius: 50%; display: flex;
+  align-items: center; justify-content: center;
+  background: var(--surface-raised); font-size: 18px;
+}
+.pop-nick { font-weight: 600; font-size: 13px; text-align: center; }
+.pop-country { color: var(--text-secondary); font-size: 11px; }
+.pop-rating { color: var(--amethyst); font-size: 13px; font-weight: 700; }
