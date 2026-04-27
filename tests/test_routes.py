@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from geostats.api.app import create_app
 from geostats.api.deps import get_db, get_geo_client
-from geostats.client import GeoClient, SearchResult
+from geostats.client import GeoClient
 from geostats.models import Account, RatingSnapshot
 
 
