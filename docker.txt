@@ -1,0 +1,114 @@
+2026-04-27 16:18:32,589 INFO discovered 44692 rated players
+2026-04-27 16:18:45,487 WARNING error ignored terminating <psycopg.Pipeline [INERROR, pipeline=ON] (host=db database=geostats) at 0x7f152a29e0f0>: pipeline aborted
+Traceback (most recent call last):
+  File "/app/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1936, in _exec_single_context
+    self.dialect.do_executemany(
+  File "/app/.venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 949, in do_executemany
+    cursor.executemany(statement, parameters)
+  File "/app/.venv/lib/python3.12/site-packages/psycopg/cursor.py", line 148, in executemany
+    raise ex.with_traceback(None)
+psycopg.errors.UniqueViolation: duplicate key value violates unique constraint "accounts_pkey"
+DETAIL:  Key (id)=(61a7d57516fd7200012667f1) already exists.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/app/.venv/bin/geostats", line 10, in <module>
+    sys.exit(cli())
+             ^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/click/core.py", line 1514, in __call__
+    return self.main(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/click/core.py", line 1435, in main
+    rv = self.invoke(ctx)
+         ^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/click/core.py", line 1902, in invoke
+    return _process_result(sub_ctx.command.invoke(sub_ctx))
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/click/core.py", line 1298, in invoke
+    return ctx.invoke(self.callback, **ctx.params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/click/core.py", line 853, in invoke
+    return callback(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/geostats/cli.py", line 24, in poll_full
+    asyncio.run(run_full_poll(
+  File "/usr/local/lib/python3.12/asyncio/runners.py", line 195, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/asyncio/base_events.py", line 691, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/geostats/poller.py", line 111, in run_full_poll
+    new_ids = _upsert_accounts(ids)
+              ^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/geostats/poller.py", line 59, in _upsert_accounts
+    with session_scope() as db:
+         ^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/contextlib.py", line 144, in __exit__
+    next(self.gen)
+  File "/app/.venv/lib/python3.12/site-packages/geostats/db.py", line 35, in session_scope
+    s.commit()
+  File "/app/.venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2030, in commit
+    trans.commit(_to_root=True)
+  File "<string>", line 2, in commit
+  File "/app/.venv/lib/python3.12/site-packages/sqlalchemy/orm/state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+                ^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 1311, in commit
+    self._prepare_impl()
+  File "<string>", line 2, in _prepare_impl
+  File "/app/.venv/lib/python3.12/site-packages/sqlalchemy/orm/state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+                ^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 1286, in _prepare_impl
+    self.session.flush()
+  File "/app/.venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 4331, in flush
+    self._flush(objects)
+  File "/app/.venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 4466, in _flush
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py", line 121, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "/app/.venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 4427, in _flush
+    flush_context.execute()
+  File "/app/.venv/lib/python3.12/site-packages/sqlalchemy/orm/unitofwork.py", line 466, in execute
+    rec.execute(self)
+  File "/app/.venv/lib/python3.12/site-packages/sqlalchemy/orm/unitofwork.py", line 642, in execute
+    util.preloaded.orm_persistence.save_obj(
+  File "/app/.venv/lib/python3.12/site-packages/sqlalchemy/orm/persistence.py", line 93, in save_obj
+    _emit_insert_statements(
+  File "/app/.venv/lib/python3.12/site-packages/sqlalchemy/orm/persistence.py", line 1048, in _emit_insert_statements
+    result = connection.execute(
+             ^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1419, in execute
+    return meth(
+           ^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/sqlalchemy/sql/elements.py", line 527, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1641, in _execute_clauseelement
+    ret = self._execute_context(
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "/app/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 2363, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "/app/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1936, in _exec_single_context
+    self.dialect.do_executemany(
+  File "/app/.venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 949, in do_executemany
+    cursor.executemany(statement, parameters)
+  File "/app/.venv/lib/python3.12/site-packages/psycopg/cursor.py", line 148, in executemany
+    raise ex.with_traceback(None)
+sqlalchemy.exc.IntegrityError: (psycopg.errors.UniqueViolation) duplicate key value violates unique constraint "accounts_pkey"
+DETAIL:  Key (id)=(61a7d57516fd7200012667f1) already exists.
+[SQL: INSERT INTO accounts (id, nick, country_code, level, is_pro, pin_url, tracked, created_at, last_polled_at, last_error, lookup_count) VALUES (%(id)s::VARCHAR, %(nick)s::VARCHAR, %(country_code)s::VARCHAR, %(level)s::INTEGER, %(is_pro)s, %(pin_url)s::VARCHAR, %(tracked)s, %(created_at)s::TIMESTAMP WITH TIME ZONE, %(last_polled_at)s::TIMESTAMP WITH TIME ZONE, %(last_error)s::VARCHAR, %(lookup_count)s::INTEGER)]
+[parameters: [{'id': '5b51062a4010740f7cd91dd5', 'nick': '5b51062a4010740f7cd91dd5', 'country_code': None, 'level': None, 'is_pro': False, 'pin_url': None, 'tracked': True, 'created_at': datetime.datetime(2026, 4, 27, 16, 18, 32, 591207, tzinfo=datetime.timezone.utc), 'last_polled_at': None, 'last_error': None, 'lookup_count': 0}, {'id': '5ff2cfa24d5c0400011fc340', 'nick': '5ff2cfa24d5c0400011fc340', 'country_code': None, 'level': None, 'is_pro': False, 'pin_url': None, 'tracked': True, 'created_at': datetime.datetime(2026, 4, 27, 16, 18, 32, 591207, tzinfo=datetime.timezone.utc), 'last_polled_at': None, 'last_error': None, 'lookup_count': 0}, {'id': '627e246762324bd00717976c', 'nick': '627e246762324bd00717976c', 'country_code': None, 'level': None, 'is_pro': False, 'pin_url': None, 'tracked': True, 'created_at': datetime.datetime(2026, 4, 27, 16, 18, 32, 591207, tzinfo=datetime.timezone.utc), 'last_polled_at': None, 'last_error': None, 'lookup_count': 0}, {'id': '5b6f185f7135fa0e48b5528a', 'nick': '5b6f185f7135fa0e48b5528a', 'country_code': None, 'level': None, 'is_pro': False, 'pin_url': None, 'tracked': True, 'created_at': datetime.datetime(2026, 4, 27, 16, 18, 32, 591207, tzinfo=datetime.timezone.utc), 'last_polled_at': None, 'last_error': None, 'lookup_count': 0}, {'id': '57d301d409f2efcce834fc94', 'nick': '57d301d409f2efcce834fc94', 'country_code': None, 'level': None, 'is_pro': False, 'pin_url': None, 'tracked': True, 'created_at': datetime.datetime(2026, 4, 27, 16, 18, 32, 591207, tzinfo=datetime.timezone.utc), 'last_polled_at': None, 'last_error': None, 'lookup_count': 0}, {'id': '654a71f1a02b54c363802082', 'nick': '654a71f1a02b54c363802082', 'country_code': None, 'level': None, 'is_pro': False, 'pin_url': None, 'tracked': True, 'created_at': datetime.datetime(2026, 4, 27, 16, 18, 32, 591207, tzinfo=datetime.timezone.utc), 'last_polled_at': None, 'last_error': None, 'lookup_count': 0}, {'id': '62be7867aa13616722f8dd4a', 'nick': '62be7867aa13616722f8dd4a', 'country_code': None, 'level': None, 'is_pro': False, 'pin_url': None, 'tracked': True, 'created_at': datetime.datetime(2026, 4, 27, 16, 18, 32, 591207, tzinfo=datetime.timezone.utc), 'last_polled_at': None, 'last_error': None, 'lookup_count': 0}, {'id': '60f46ec8cac323000166141d', 'nick': '60f46ec8cac323000166141d', 'country_code': None, 'level': None, 'is_pro': False, 'pin_url': None, 'tracked': True, 'created_at': datetime.datetime(2026, 4, 27, 16, 18, 32, 591207, tzinfo=datetime.timezone.utc), 'last_polled_at': None, 'last_error': None, 'lookup_count': 0}  ... displaying 10 of 44692 total bound parameter sets ...  {'id': '63ef984ae679eaf11391e6fe', 'nick': '63ef984ae679eaf11391e6fe', 'country_code': None, 'level': None, 'is_pro': False, 'pin_url': None, 'tracked': True, 'created_at': datetime.datetime(2026, 4, 27, 16, 18, 32, 591207, tzinfo=datetime.timezone.utc), 'last_polled_at': None, 'last_error': None, 'lookup_count': 0}, {'id': '60dc7558fbc5170001d994d0', 'nick': '60dc7558fbc5170001d994d0', 'country_code': None, 'level': None, 'is_pro': False, 'pin_url': None, 'tracked': True, 'created_at': datetime.datetime(2026, 4, 27, 16, 18, 32, 591207, tzinfo=datetime.timezone.utc), 'last_polled_at': None, 'last_error': None, 'lookup_count': 0}]]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+root@pand:~/geostats#
