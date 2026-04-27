@@ -5,6 +5,7 @@ import logging
 from datetime import UTC, datetime
 
 from sqlalchemy import text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from geostats.client import GeoClient
 from geostats.db import session_scope
@@ -55,15 +56,24 @@ async def poll_account(client: GeoClient, account_id: str, delay: float = 1.5) -
 
 def _upsert_accounts(ids: list[str]) -> set[str]:
     now = datetime.now(UTC)
-    new_ids: set[str] = set()
     unique_ids = list(dict.fromkeys(ids))
     with session_scope() as db:
         existing = {row.id for row in db.query(Account.id).all()}
-        for user_id in unique_ids:
-            if user_id not in existing:
-                new_ids.add(user_id)
-                db.add(Account(id=user_id, nick=user_id, tracked=True, created_at=now))
+        new_ids = {uid for uid in unique_ids if uid not in existing}
         if unique_ids:
+            db.execute(
+                pg_insert(Account)
+                .values([
+                    {
+                        "id": uid, "nick": uid, "country_code": None, "level": None,
+                        "is_pro": False, "pin_url": None, "tracked": True,
+                        "created_at": now, "last_polled_at": None, "last_error": None,
+                        "lookup_count": 0,
+                    }
+                    for uid in unique_ids
+                ])
+                .on_conflict_do_update(index_elements=["id"], set_={"tracked": True})
+            )
             db.query(Account).filter(
                 Account.id.notin_(unique_ids), Account.tracked == True  # noqa: E712
             ).update({"tracked": False}, synchronize_session=False)
