@@ -4,9 +4,89 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{% block title %}GeoStats{% endblock %}</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌎</text></svg>">
 <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
+<div class="sky-layer" id="sky-a"></div>
+<div class="sky-layer" id="sky-b"></div>
+
+<button class="sky-btn" id="sky-btn" title="Change background" aria-label="Change background">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+       stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+    <path d="M12 3a9 9 0 1 0 9 9"/>
+    <polyline points="16 3 21 3 21 8"/>
+  </svg>
+</button>
+
 {% block body %}{% endblock %}
+
+<footer class="site-footer">
+  <span class="footer-by">by <a href="https://github.com/dkorbelainen" target="_blank" rel="noopener">Paand</a></span>
+  <a class="footer-gh" href="https://github.com/dkorbelainen/geostats" target="_blank" rel="noopener" aria-label="GitHub">
+    <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38
+               0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13
+               -.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66
+               .07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15
+               -.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27
+               .68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12
+               .51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48
+               0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+    </svg>
+  </a>
+</footer>
+
+<script>
+(function () {
+  const SKIES = [
+    '/static/sky2.jpg',
+    '/static/sky0.jpg',
+    '/static/sky1.jpg',
+    '/static/sky3.jpg',
+    '/static/sky4.jpg',
+  ];
+  const SK_KEY = 'gs_sky';
+
+  const layerA = document.getElementById('sky-a');
+  const layerB = document.getElementById('sky-b');
+  const btn    = document.getElementById('sky-btn');
+  const banner = document.querySelector('.top-banner');
+
+  let current = +(localStorage.getItem(SK_KEY) ?? 0);
+  let front   = layerA;
+  let back    = layerB;
+
+  function applyBg(idx, animate) {
+    const url = `url('${SKIES[idx]}')`;
+    if (banner) banner.style.backgroundImage = url;
+
+    if (!animate) {
+      front.style.backgroundImage = url;
+      front.classList.add('sky-active');
+      return;
+    }
+    back.style.backgroundImage = url;
+    back.classList.add('sky-active');
+    front.classList.remove('sky-active');
+    [front, back] = [back, front];
+  }
+
+  function next() {
+    current = (current + 1) % SKIES.length;
+    localStorage.setItem(SK_KEY, current);
+    applyBg(current, true);
+    btn.classList.add('spinning');
+    setTimeout(() => btn.classList.remove('spinning'), 400);
+  }
+
+  applyBg(current, false);
+  btn.addEventListener('click', next);
+
+  window.addEventListener('load', () => {
+    SKIES.forEach(src => { const img = new Image(); img.src = src; });
+  });
+})();
+</script>
 </body>
 </html>

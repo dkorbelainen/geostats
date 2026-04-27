@@ -3,14 +3,50 @@
 {% block body %}
 <div class="landing">
   <div class="landing-inner">
-    <div class="site-logo">GeoStats</div>
+    <div class="site-logo">🌎 GeoStats</div>
     <p class="tagline">Track GeoGuessr ratings over time</p>
-    <form method="post" action="/lookup">
+    <form method="post" action="/lookup" id="lookup-form">
       {% if error %}<p class="form-error">{{ error }}</p>{% endif %}
-      <input class="lookup-input" type="text" name="profile"
-             placeholder="Player URL, user ID or nick" autofocus autocomplete="off">
+      <div class="lookup-wrap">
+        <input class="lookup-input" type="text" name="profile" id="profile-input"
+               placeholder="Player URL, user ID or nick" autofocus autocomplete="off">
+        <ul class="autocomplete-list" id="autocomplete-list"></ul>
+      </div>
       <button class="lookup-btn" type="submit">Look up</button>
     </form>
+    <script>
+    (function() {
+      const input = document.getElementById('profile-input');
+      const list = document.getElementById('autocomplete-list');
+      const form = document.getElementById('lookup-form');
+      let timer;
+      input.addEventListener('input', () => {
+        clearTimeout(timer);
+        const q = input.value.trim();
+        if (q.length < 2) { list.innerHTML = ''; list.classList.remove('open'); return; }
+        timer = setTimeout(async () => {
+          try {
+            const r = await fetch('/api/search?q=' + encodeURIComponent(q));
+            if (!r.ok) return;
+            const data = await r.json();
+            list.innerHTML = data.map(u =>
+              `<li data-id="${u.id}">${u.nick}</li>`
+            ).join('');
+            list.classList.toggle('open', data.length > 0);
+            list.querySelectorAll('li').forEach(li => {
+              li.addEventListener('mousedown', e => {
+                e.preventDefault();
+                input.value = li.dataset.id;
+                list.classList.remove('open');
+                form.submit();
+              });
+            });
+          } catch (_) {}
+        }, 180);
+      });
+      input.addEventListener('blur', () => setTimeout(() => list.classList.remove('open'), 150));
+    })();
+    </script>
   </div>
   {% if top_profiles %}
   <section class="popular">
@@ -21,7 +57,7 @@
         {% if acc.pin_url %}
         <img class="pop-avatar" src="{{ acc.pin_url }}" alt="">
         {% else %}
-        <div class="pop-avatar pop-avatar-ph">🧭</div>
+        <div class="pop-avatar pop-avatar-ph">🌎</div>
         {% endif %}
         <div class="pop-nick">{{ acc.nick }}</div>
         {% if acc.country_code %}

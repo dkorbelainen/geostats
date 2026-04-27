@@ -239,6 +239,26 @@ async def profile_page(
     )
 
 
+@router.get("/api/search")
+async def search_accounts(
+    q: str = Query(default=""),
+    db: Session = Depends(get_db),  # noqa: B008
+) -> list[dict[str, str]]:
+    if len(q) < 2:
+        return []
+    results = (
+        db.query(Account.id, Account.nick)
+        .filter(
+            Account.nick.ilike(f"%{q}%"),
+            Account.last_polled_at.isnot(None),
+        )
+        .order_by(Account.lookup_count.desc())
+        .limit(8)
+        .all()
+    )
+    return [{"id": r.id, "nick": r.nick} for r in results]
+
+
 @router.get("/api/profile/{user_id}/series")
 async def series_api(
     user_id: str,
