@@ -42,10 +42,21 @@ services:
     build: .
     restart: unless-stopped
     command: >
-      sh -c "while true; do
-        geostats poll-top --limit 2000;
-        sleep 21600;
-      done"
+      sh -c "
+        DAY=0; TICK=0;
+        while true; do
+          geostats poll-new;
+          if [ $((TICK % 4)) -eq 0 ]; then
+            if [ $((DAY % 7)) -eq 0 ]; then
+              geostats poll-full;
+            else
+              geostats poll-top --limit 2000;
+            fi;
+            DAY=$((DAY + 1));
+          fi;
+          TICK=$((TICK + 1));
+          sleep 21600;
+        done"
     environment:
       DATABASE_URL: >-
         postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db/${POSTGRES_DB}
