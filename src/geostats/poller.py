@@ -160,14 +160,21 @@ async def run_top_poll(ncfa_cookie: str, delay: float, limit: int) -> None:
             ORDER BY rs.account_id, rs.captured_at DESC
         """)).fetchall()
 
+        lookup_ids = {
+            row.id for row in db.query(Account.id)
+            .filter(Account.lookup_count > 0, Account.tracked == True)  # noqa: E712
+            .all()
+        }
+
     top_ids = [
         r.account_id
         for r in sorted(rows, key=lambda r: -(r.rating or 0))[:limit]
     ]
-    log.info("top-%d poll: %d accounts", limit, len(top_ids))
+    all_ids = list(dict.fromkeys(top_ids + list(lookup_ids)))
+    log.info("top-%d poll: %d accounts (%d from lookups)", limit, len(all_ids), len(lookup_ids))
 
     async with GeoClient(ncfa_cookie) as client:
-        await _run_poll(client, top_ids, delay, set())
+        await _run_poll(client, all_ids, delay, set())
 
     with session_scope() as db:
         compute_ranks(db)
