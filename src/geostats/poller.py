@@ -116,6 +116,28 @@ async def run_full_poll(ncfa_cookie: str, delay: float) -> None:
     log.info("ranks computed")
 
 
+async def run_new_poll(ncfa_cookie: str, delay: float) -> None:
+    from geostats.ranker import compute_ranks  # noqa: PLC0415
+
+    with session_scope() as db:
+        new_ids = [
+            row.id for row in db.query(Account.id)
+            .filter(Account.tracked == True, Account.last_polled_at.is_(None))  # noqa: E712
+            .all()
+        ]
+
+    log.info("new accounts to poll: %d", len(new_ids))
+    if not new_ids:
+        return
+
+    async with GeoClient(ncfa_cookie) as client:
+        await _run_poll(client, new_ids, delay, set(new_ids))
+
+    with session_scope() as db:
+        compute_ranks(db)
+    log.info("new accounts polled and ranks computed")
+
+
 async def run_top_poll(ncfa_cookie: str, delay: float, limit: int) -> None:
     from geostats.ranker import compute_ranks  # noqa: PLC0415
 

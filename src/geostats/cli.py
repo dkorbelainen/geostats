@@ -46,3 +46,16 @@ def poll_top(limit: int) -> None:
         delay=settings.poll_request_delay_sec,
         limit=limit,
     ))
+
+
+@cli.command("poll-new")
+def poll_new() -> None:
+    settings = get_settings()
+    if not settings.geoguessr_ncfa_cookie:
+        raise click.ClickException("GEOGUESSR_NCFA_COOKIE is not set")
+    session_factory()
+    from geostats.poller import run_new_poll  # noqa: PLC0415
+    asyncio.run(run_new_poll(
+        ncfa_cookie=settings.geoguessr_ncfa_cookie,
+        delay=settings.poll_request_delay_sec,
+    ))
