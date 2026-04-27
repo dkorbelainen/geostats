@@ -278,7 +278,7 @@ svg.addEventListener("mousemove", (e) => {
   dot.setAttribute("cx", px);
   dot.setAttribute("cy", py);
   dot.style.display = "block";
-  tooltip.textContent = `${date}  ${rating.toLocaleString()}`;
+  tooltip.textContent = `${date} — ${rating.toLocaleString()}`;
   tooltip.style.left = (e.clientX - rect.left + 12) + "px";
   tooltip.style.top = (e.clientY - rect.top - 32) + "px";
   tooltip.style.display = "block";
