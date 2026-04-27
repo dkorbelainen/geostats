@@ -19,14 +19,27 @@ body {
   font-family: system-ui, -apple-system, sans-serif;
   font-size: 14px;
 }
-body::before {
-  content: '';
-  position: fixed; inset: 0;
-  background: url('/static/sky2.jpg') center/cover no-repeat;
-  opacity: 0.13;
-  z-index: -1;
-  pointer-events: none;
+
+/* ── Sky background layers (crossfade via JS) ── */
+.sky-layer {
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background-size: cover; background-position: center;
+  opacity: 0; transition: opacity 1.2s ease;
 }
+.sky-layer.sky-active { opacity: 0.13; }
+
+/* ── Sky switcher button ── */
+.sky-btn {
+  position: fixed; top: 14px; right: 14px; z-index: 200;
+  width: 32px; height: 32px; border-radius: 50%;
+  background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.14);
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: background .2s, transform .35s ease;
+  color: rgba(255,255,255,.5); font-size: 14px;
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+.sky-btn:hover { background: rgba(255,255,255,.14); color: rgba(255,255,255,.85); }
+.sky-btn.spinning { transform: rotate(180deg); }
 
 /* ── Landing ── */
 .landing { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 40px; padding: 40px 16px; }
@@ -52,7 +65,6 @@ body::before {
 /* ── Top banner ── */
 .top-banner {
   position: relative;
-  background-image: url('/static/sky2.jpg');
   background-size: cover; background-position: center 30%;
   border-radius: 0 0 20px 20px;
   margin-bottom: 20px; overflow: hidden;

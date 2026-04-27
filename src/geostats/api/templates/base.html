@@ -7,7 +7,19 @@
 <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
+<div class="sky-layer" id="sky-a"></div>
+<div class="sky-layer" id="sky-b"></div>
+
+<button class="sky-btn" id="sky-btn" title="Change background" aria-label="Change background">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+       stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+    <path d="M12 3a9 9 0 1 0 9 9"/>
+    <polyline points="16 3 21 3 21 8"/>
+  </svg>
+</button>
+
 {% block body %}{% endblock %}
+
 <footer class="site-footer">
   <span class="footer-by">by <a href="https://github.com/dkorbelainen" target="_blank" rel="noopener">Paand</a></span>
   <a class="footer-gh" href="https://github.com/dkorbelainen/geostats" target="_blank" rel="noopener" aria-label="GitHub">
@@ -23,5 +35,57 @@
     </svg>
   </a>
 </footer>
+
+<script>
+(function () {
+  const SKIES = [
+    '/static/sky2.jpg',
+    '/static/sky0.jpg',
+    '/static/sky1.jpg',
+    '/static/sky3.jpg',
+    '/static/sky4.jpg',
+  ];
+  const SK_KEY = 'gs_sky';
+
+  const layerA = document.getElementById('sky-a');
+  const layerB = document.getElementById('sky-b');
+  const btn    = document.getElementById('sky-btn');
+  const banner = document.querySelector('.top-banner');
+
+  let current = +(localStorage.getItem(SK_KEY) ?? 0);
+  let front   = layerA;
+  let back    = layerB;
+
+  function applyBg(idx, animate) {
+    const url = `url('${SKIES[idx]}')`;
+    if (banner) banner.style.backgroundImage = url;
+
+    if (!animate) {
+      front.style.backgroundImage = url;
+      front.classList.add('sky-active');
+      return;
+    }
+    back.style.backgroundImage = url;
+    back.classList.add('sky-active');
+    front.classList.remove('sky-active');
+    [front, back] = [back, front];
+  }
+
+  function next() {
+    current = (current + 1) % SKIES.length;
+    localStorage.setItem(SK_KEY, current);
+    applyBg(current, true);
+    btn.classList.add('spinning');
+    setTimeout(() => btn.classList.remove('spinning'), 400);
+  }
+
+  applyBg(current, false);
+  btn.addEventListener('click', next);
+
+  window.addEventListener('load', () => {
+    SKIES.forEach(src => { const img = new Image(); img.src = src; });
+  });
+})();
+</script>
 </body>
 </html>
