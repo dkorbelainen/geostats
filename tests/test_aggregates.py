@@ -170,3 +170,45 @@ def test_summarize_profile_populates_all_keys():
     assert set(summary.delta_30d.keys()) == set(RATING_FIELDS)
     assert set(summary.record.keys()) == set(RATING_FIELDS)
     assert set(summary.avg_per_week_30d.keys()) == set(RATING_FIELDS)
+    assert set(summary.percentile.keys()) == set(RATING_FIELDS)
+
+
+def test_summarize_profile_has_percentile_keys() -> None:
+    acc = _account()
+    snaps = [_snap(10, rating=_RATING_2000), _snap(1, rating=_RATING_2100)]
+    summary = summarize_profile(acc, snaps)
+    assert set(summary.percentile.keys()) == set(RATING_FIELDS)
+
+
+def test_summarize_profile_percentile_calculated() -> None:
+    acc = _account()
+    snap = _snap(1, rating=_RATING_2100)
+    snap.position_overall = 10
+    snaps = [snap]
+    summary = summarize_profile(acc, snaps, total_tracked=100)
+    assert summary.percentile["overall"] == 90.0
+
+
+def test_summarize_profile_percentile_none_when_no_position() -> None:
+    acc = _account()
+    snaps = [_snap(1, rating=_RATING_2100)]
+    summary = summarize_profile(acc, snaps, total_tracked=100)
+    assert summary.percentile["overall"] is None
+
+
+def test_summarize_profile_percentile_none_when_total_zero() -> None:
+    acc = _account()
+    snap = _snap(1, rating=_RATING_2100)
+    snap.position_overall = 5
+    snaps = [snap]
+    summary = summarize_profile(acc, snaps, total_tracked=0)
+    assert summary.percentile["overall"] is None
+
+
+def test_summarize_profile_default_total_tracked_is_zero() -> None:
+    acc = _account()
+    snap = _snap(1, rating=_RATING_2100)
+    snap.position_overall = 5
+    snaps = [snap]
+    summary = summarize_profile(acc, snaps)
+    assert summary.percentile["overall"] is None

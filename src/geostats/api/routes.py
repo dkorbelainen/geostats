@@ -13,6 +13,7 @@ from geostats.api.deps import get_db, get_geo_client
 from geostats.client import GeoClient
 from geostats.models import Account, RatingSnapshot
 from geostats.stats.aggregates import summarize_profile
+from geostats.stats.forecast import ForecastResult, forecast_rating
 from geostats.stats.series import get_series
 
 router = APIRouter()
@@ -180,6 +181,7 @@ async def lookup(
 async def profile_page(
     user_id: str,
     request: Request,
+    forecast: int = Query(default=30, ge=1, le=365),
     db: Session = Depends(get_db),  # noqa: B008
 ) -> Response:
     try:
@@ -207,11 +209,33 @@ async def profile_page(
         .order_by(RatingSnapshot.captured_at.asc())
         .all()
     )
-    summary = summarize_profile(account, snaps)
+
+    total_tracked: int = (
+        db.query(func.count(Account.id))
+        .filter(Account.tracked == True, Account.last_polled_at.isnot(None))  # noqa: E712
+        .scalar()
+        or 0
+    )
+
+    summary = summarize_profile(account, snaps, total_tracked=total_tracked)
+
+    fc_7d = forecast_rating(snaps, "overall", 7)
+    fc_30d = forecast_rating(snaps, "overall", 30)
+    fc_custom: ForecastResult | None = (
+        forecast_rating(snaps, "overall", forecast) if forecast not in (7, 30) else None
+    )
+
     return templates.TemplateResponse(
         request,
         "profile.html",
-        {"summary": summary, "collecting": False},
+        {
+            "summary": summary,
+            "collecting": False,
+            "fc_7d": fc_7d,
+            "fc_30d": fc_30d,
+            "fc_custom": fc_custom,
+            "forecast_horizon": forecast,
+        },
     )
 
 
@@ -234,3 +258,31 @@ async def series_api(
     )
     points = get_series(snaps, mode, range_)
     return {"mode": mode, "range": range_, "points": points}
+
+
+@router.get("/api/profile/{user_id}/forecast")
+async def forecast_api(
+    user_id: str,
+    db: Session = Depends(get_db),  # noqa: B008
+    mode: Literal["overall", "moving", "nomove", "nmpz"] = Query(default="overall"),
+    horizon: int = Query(default=30, ge=1, le=365),
+) -> dict[str, object]:
+    account = db.get(Account, user_id)
+    if account is None:
+        raise HTTPException(status_code=404, detail="not found")
+
+    snaps: list[RatingSnapshot] = (
+        db.query(RatingSnapshot)
+        .filter(RatingSnapshot.account_id == user_id)
+        .order_by(RatingSnapshot.captured_at.asc())
+        .all()
+    )
+    result = forecast_rating(snaps, mode, horizon)
+    return {
+        "horizon": result.horizon_days,
+        "mode": mode,
+        "predicted_delta": result.predicted_delta,
+        "predicted_rating": result.predicted_rating,
+        "confidence": result.confidence,
+        "n_points": result.n_points,
+    }

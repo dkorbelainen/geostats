@@ -107,12 +107,25 @@ class ProfileSummary:
     delta_30d: dict[str, int | None]
     record: dict[str, Record | None]
     avg_per_week_30d: dict[str, float | None]
+    percentile: dict[str, float | None]
 
 
-def summarize_profile(account: Account, snaps: list[RatingSnapshot]) -> ProfileSummary:
+def summarize_profile(
+    account: Account,
+    snaps: list[RatingSnapshot],
+    total_tracked: int = 0,
+) -> ProfileSummary:
     now = datetime.now(tz=timezone.utc)  # noqa: UP017
     w7 = timedelta(days=7)
     w30 = timedelta(days=30)
+    latest = snaps[-1] if snaps else None
+    pct: dict[str, float | None] = {}
+    for f in RATING_FIELDS:
+        pos: int | None = getattr(latest, f"position_{f}") if latest else None
+        if pos is not None and total_tracked > 0:
+            pct[f] = round((1 - pos / total_tracked) * 100, 1)
+        else:
+            pct[f] = None
     return ProfileSummary(
         account=account,
         snaps=snaps,
@@ -136,4 +149,5 @@ def summarize_profile(account: Account, snaps: list[RatingSnapshot]) -> ProfileS
             f: average_rate_per_week(snaps, f, now=now, window=w30)  # type: ignore[arg-type]
             for f in RATING_FIELDS
         },
+        percentile=pct,
     )
