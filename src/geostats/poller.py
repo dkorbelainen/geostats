@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import random
 from datetime import UTC, datetime
 
 from sqlalchemy import text
@@ -28,11 +29,15 @@ async def discover_leaderboard(client: GeoClient, limit: int = 100) -> list[str]
     return all_ids
 
 
-async def poll_account(client: GeoClient, account_id: str, delay: float = 1.5) -> dict[str, object]:
+def _jitter(base: float) -> float:
+    return random.uniform(base * 0.6, base * 2.2)
+
+
+async def poll_account(client: GeoClient, account_id: str, delay: float = 3.0) -> dict[str, object]:
     progress = await client.get_ranked_progress(account_id)
-    await asyncio.sleep(delay)
+    await asyncio.sleep(_jitter(delay))
     stats = await client.get_user_stats(account_id)
-    await asyncio.sleep(delay)
+    await asyncio.sleep(_jitter(delay))
 
     gm = progress.game_mode_ratings
     dt = stats.duels_total
@@ -90,7 +95,7 @@ async def _run_poll(
             fetch_profile = account_id in fetch_info_ids
             if fetch_profile:
                 info = await client.get_user_info(account_id)
-                await asyncio.sleep(delay)
+                await asyncio.sleep(_jitter(delay))
                 with session_scope() as db:
                     db.query(Account).filter(Account.id == account_id).update({
                         "nick": info.nick,

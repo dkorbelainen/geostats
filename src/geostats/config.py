@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     database_url: str
     geoguessr_ncfa_cookie: str | None = None
     poll_batch_size: int = 50
-    poll_request_delay_sec: float = 1.5
+    poll_request_delay_sec: float = 3.0
     raw_response_logging: bool = False
 
 

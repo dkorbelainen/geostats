@@ -1,9 +1,27 @@
 from __future__ import annotations
 
+import asyncio
+import logging
+import random
+
 import httpx
 from pydantic import BaseModel, ConfigDict, Field
 
 _BASE = "https://www.geoguessr.com"
+_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/124.0.0.0 Safari/537.36"
+)
+_HEADERS = {
+    "User-Agent": _UA,
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer": "https://www.geoguessr.com/",
+    "Origin": "https://www.geoguessr.com",
+}
+
+log = logging.getLogger(__name__)
 
 
 class UserInfo(BaseModel):
@@ -75,8 +93,9 @@ class GeoClient:
     def __init__(self, ncfa_cookie: str) -> None:
         self._client = httpx.AsyncClient(
             base_url=_BASE,
-            headers={"Cookie": f"_ncfa={ncfa_cookie}"},
+            headers={**_HEADERS, "Cookie": f"_ncfa={ncfa_cookie}"},
             timeout=30.0,
+            follow_redirects=True,
         )
 
     async def __aenter__(self) -> GeoClient:
@@ -85,32 +104,41 @@ class GeoClient:
     async def __aexit__(self, *_: object) -> None:
         await self._client.aclose()
 
-    async def get_user_info(self, user_id: str) -> UserInfo:
-        r = await self._client.get(f"/api/v3/users/{user_id}")
+    async def _get(self, url: str, **kwargs: object) -> httpx.Response:
+        """GET with 429 backoff retry."""
+        for attempt in range(4):
+            r = await self._client.get(url, **kwargs)  # type: ignore[arg-type]
+            if r.status_code == 429:
+                wait = (2 ** attempt) * 20 + random.uniform(5, 15)
+                log.warning("429 rate-limited on %s, waiting %.0fs", url, wait)
+                await asyncio.sleep(wait)
+                continue
+            r.raise_for_status()
+            return r
         r.raise_for_status()
+        return r  # type: ignore[return-value]
+
+    async def get_user_info(self, user_id: str) -> UserInfo:
+        r = await self._get(f"/api/v3/users/{user_id}")
         return UserInfo.from_response(r.json())
 
     async def get_ranked_progress(self, user_id: str) -> RankedProgress:
-        r = await self._client.get(f"/api/v4/ranked-system/progress/{user_id}")
-        r.raise_for_status()
+        r = await self._get(f"/api/v4/ranked-system/progress/{user_id}")
         return RankedProgress.model_validate(r.json())
 
     async def get_user_stats(self, user_id: str) -> UserStats:
-        r = await self._client.get(f"/api/v4/stats/users/{user_id}")
-        r.raise_for_status()
+        r = await self._get(f"/api/v4/stats/users/{user_id}")
         return UserStats.model_validate(r.json())
 
     async def get_leaderboard_page(self, offset: int, limit: int = 100) -> list[str]:
-        r = await self._client.get(
+        r = await self._get(
             "/api/v4/ranked-system/ratings",
             params={"offset": offset, "limit": limit},
         )
-        r.raise_for_status()
         return [entry["userId"] for entry in r.json()]
 
     async def search_user(self, nick: str) -> list[SearchResult]:
-        r = await self._client.get("/api/v3/search/user", params={"q": nick})
-        r.raise_for_status()
+        r = await self._get("/api/v3/search/user", params={"q": nick})
         data = r.json()
         if isinstance(data, list):
             return [SearchResult.model_validate(u) for u in data]

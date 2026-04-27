@@ -50,12 +50,12 @@ services:
             if [ $((DAY % 7)) -eq 0 ]; then
               geostats poll-discover;
             else
-              geostats poll-top --limit 2000;
+              geostats poll-top --limit 500;
             fi;
             DAY=$((DAY + 1));
           fi;
           TICK=$((TICK + 1));
-          sleep 21600;
+          sleep $((21600 + RANDOM % 2400 - 1200));
         done"
     environment:
       DATABASE_URL: >-
