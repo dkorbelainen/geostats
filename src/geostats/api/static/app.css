@@ -190,3 +190,27 @@ body {
 .pop-nick { font-weight: 600; font-size: 13px; text-align: center; }
 .pop-country { color: var(--text-secondary); font-size: 11px; }
 .pop-rating { color: var(--amethyst); font-size: 13px; font-weight: 700; }
+
+/* ── Forecast ── */
+.forecast-grid { display: flex; gap: .75rem; flex-wrap: wrap; margin-bottom: 14px; }
+.fc-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 14px 16px; min-width: 7rem; flex: 1;
+}
+.fc-label {
+  font-size: 10px; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--text-muted); margin-bottom: 4px;
+}
+.fc-delta { font-size: 22px; font-weight: 700; margin-bottom: 2px; }
+.fc-rating { font-size: 12px; color: var(--text-secondary); }
+.fc-conf { font-size: 11px; color: var(--text-muted); }
+.fc-empty { font-size: 12px; color: var(--text-muted); padding: 8px 0; }
+
+/* ── Chart tooltip ── */
+#chart-tooltip {
+  display: none; position: absolute;
+  background: #1e1b4b; color: var(--text-primary);
+  padding: 4px 8px; border-radius: 6px; font-size: 12px;
+  pointer-events: none; white-space: nowrap; z-index: 10;
+  border: 1px solid var(--border);
+}

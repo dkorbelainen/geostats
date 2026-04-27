@@ -3,6 +3,7 @@
   {% if collecting %}{{ account.nick }}{% else %}{{ summary.account.nick }}{% endif %} — GeoStats
 {% endblock %}
 {% block body %}
+{% if collecting %}<meta http-equiv="refresh" content="60">{% endif %}
 {% set acc = summary.account if not collecting else account %}
 <div class="page">
 
@@ -65,12 +66,13 @@
       {% if latest %}
       <div class="hero-rank">
         {% if latest.position_overall %}#<b>{{ latest.position_overall }}</b> worldwide{% endif %}
-        {% if latest.position_country %}&nbsp;·&nbsp; #<b>{{ latest.position_country }}</b> in {{ acc.country_code }}{% endif %}
+        {% if summary.percentile["overall"] is not none %}&nbsp;·&nbsp;top <b>{{ summary.percentile["overall"] }}%</b>{% endif %}
+        {% if latest.position_country %}&nbsp;·&nbsp;#<b>{{ latest.position_country }}</b> in {{ acc.country_code }}{% endif %}
       </div>
       {% endif %}
     </div>
 
-    <div class="chart-card">
+    <div class="chart-card" style="position:relative">
       <div class="chart-header">
         <span class="chart-mode-label">Showing: <span id="chart-mode-name">Overall</span></span>
         <div class="range-btns">
@@ -92,6 +94,7 @@
         <path id="chart-line" fill="none" stroke="#a78bfa" stroke-width="2.5"
               stroke-linejoin="round" stroke-linecap="round"/>
       </svg>
+      <div id="chart-tooltip"></div>
     </div>
 
     <p class="mode-hint">Click a mode to switch chart &amp; stats</p>
@@ -161,6 +164,24 @@
       {% endfor %}
     </div>
 
+    <p class="section-label">Forecast (Overall)</p>
+    <div class="forecast-grid">
+      {% for fc, label in [(fc_7d, "7 days"), (fc_30d, "30 days")] + ([(fc_custom, forecast_horizon ~ " days")] if fc_custom is not none else []) %}
+      <div class="fc-card">
+        <div class="fc-label">{{ label }}</div>
+        {% if fc and fc.predicted_delta is not none %}
+        <div class="fc-delta {{ 'dp' if fc.predicted_delta > 0 else 'dn' if fc.predicted_delta < 0 else 'dm' }}">
+          {{ fc.predicted_delta | fmt_delta }}
+        </div>
+        <div class="fc-rating">→ {{ fc.predicted_rating | fmt_rating }}</div>
+        <div class="fc-conf">±{{ fc.confidence | fmt_rating }}</div>
+        {% else %}
+        <div class="fc-empty">Not enough data</div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+
   {% endif %}
   </div>
 </div>
@@ -171,6 +192,8 @@ const PROFILE_ID = {{ summary.account.id | tojson }};
 let currentMode = "overall";
 let currentRange = "30d";
 const W = 600, H = 120, PAD = 8;
+let chartPoints = [];
+let chartPts = [];
 
 function smooth(pts) {
   if (pts.length < 2) return "";
@@ -184,9 +207,10 @@ function smooth(pts) {
 }
 
 function drawChart(points) {
+  chartPoints = points;
   const line = document.getElementById("chart-line");
   const fill = document.getElementById("chart-fill");
-  if (!points.length) { line.setAttribute("d", ""); fill.setAttribute("d", ""); return; }
+  if (!points.length) { line.setAttribute("d", ""); fill.setAttribute("d", ""); chartPts = []; return; }
   const values = points.map(p => p[1]);
   const mn = Math.min(...values) - 30, mx = Math.max(...values) + 30;
   const n = values.length;
@@ -194,6 +218,7 @@ function drawChart(points) {
     PAD + (n > 1 ? (i / (n - 1)) * (W - PAD * 2) : W / 2),
     H - PAD - ((v - mn) / (mx - mn || 1)) * (H - PAD * 2)
   ]);
+  chartPts = pts;
   const linePath = smooth(pts);
   const fillPath = pts.length > 1
     ? linePath + ` L${pts[pts.length - 1][0]},${H} L${pts[0][0]},${H} Z`
@@ -230,6 +255,27 @@ document.querySelectorAll(".rbtn").forEach(btn => {
 });
 
 fetchAndDraw("overall", "30d");
+
+const tooltip = document.getElementById("chart-tooltip");
+const svg = document.getElementById("chart-svg");
+svg.addEventListener("mousemove", (e) => {
+  if (!chartPts.length) return;
+  const rect = svg.getBoundingClientRect();
+  const svgX = (e.clientX - rect.left) / rect.width * W;
+  let nearest = 0, minDist = Infinity;
+  chartPts.forEach((pt, i) => {
+    const d = Math.abs(pt[0] - svgX);
+    if (d < minDist) { minDist = d; nearest = i; }
+  });
+  const [date, rating] = chartPoints[nearest];
+  tooltip.textContent = `${date}  ${rating.toLocaleString()}`;
+  tooltip.style.left = (e.clientX - rect.left + 12) + "px";
+  tooltip.style.top = (e.clientY - rect.top - 32) + "px";
+  tooltip.style.display = "block";
+});
+svg.addEventListener("mouseleave", () => {
+  tooltip.style.display = "none";
+});
 </script>
 {% endif %}
 {% endblock %}

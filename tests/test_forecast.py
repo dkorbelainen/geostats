@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from geostats.models import RatingSnapshot
-from geostats.stats.forecast import ForecastResult, forecast_rating
+from geostats.stats.forecast import forecast_rating
 
 
 def _now() -> datetime:
