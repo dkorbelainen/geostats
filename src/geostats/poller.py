@@ -56,15 +56,16 @@ async def poll_account(client: GeoClient, account_id: str, delay: float = 1.5) -
 def _upsert_accounts(ids: list[str]) -> set[str]:
     now = datetime.now(UTC)
     new_ids: set[str] = set()
+    unique_ids = list(dict.fromkeys(ids))
     with session_scope() as db:
         existing = {row.id for row in db.query(Account.id).all()}
-        for user_id in ids:
+        for user_id in unique_ids:
             if user_id not in existing:
                 new_ids.add(user_id)
                 db.add(Account(id=user_id, nick=user_id, tracked=True, created_at=now))
-        if ids:
+        if unique_ids:
             db.query(Account).filter(
-                Account.id.notin_(ids), Account.tracked == True  # noqa: E712
+                Account.id.notin_(unique_ids), Account.tracked == True  # noqa: E712
             ).update({"tracked": False}, synchronize_session=False)
     return new_ids
 
@@ -102,6 +103,14 @@ async def _run_poll(
                 )
 
 
+async def run_discover(ncfa_cookie: str) -> None:
+    async with GeoClient(ncfa_cookie) as client:
+        ids = await discover_leaderboard(client, limit=100)
+    log.info("discovered %d rated players", len(ids))
+    new_ids = _upsert_accounts(ids)
+    log.info("new accounts added: %d", len(new_ids))
+
+
 async def run_full_poll(ncfa_cookie: str, delay: float) -> None:
     from geostats.ranker import compute_ranks  # noqa: PLC0415
 
@@ -109,7 +118,8 @@ async def run_full_poll(ncfa_cookie: str, delay: float) -> None:
         ids = await discover_leaderboard(client, limit=100)
         log.info("discovered %d rated players", len(ids))
         new_ids = _upsert_accounts(ids)
-        await _run_poll(client, ids, delay, new_ids)
+        unique_ids = list(dict.fromkeys(ids))
+        await _run_poll(client, unique_ids, delay, new_ids)
 
     with session_scope() as db:
         compute_ranks(db)
@@ -150,14 +160,21 @@ async def run_top_poll(ncfa_cookie: str, delay: float, limit: int) -> None:
             ORDER BY rs.account_id, rs.captured_at DESC
         """)).fetchall()
 
+        lookup_ids = {
+            row.id for row in db.query(Account.id)
+            .filter(Account.lookup_count > 0, Account.tracked == True)  # noqa: E712
+            .all()
+        }
+
     top_ids = [
         r.account_id
         for r in sorted(rows, key=lambda r: -(r.rating or 0))[:limit]
     ]
-    log.info("top-%d poll: %d accounts", limit, len(top_ids))
+    all_ids = list(dict.fromkeys(top_ids + list(lookup_ids)))
+    log.info("top-%d poll: %d accounts (%d from lookups)", limit, len(all_ids), len(lookup_ids))
 
     async with GeoClient(ncfa_cookie) as client:
-        await _run_poll(client, top_ids, delay, set())
+        await _run_poll(client, all_ids, delay, set())
 
     with session_scope() as db:
         compute_ranks(db)

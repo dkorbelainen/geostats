@@ -48,7 +48,7 @@ services:
           geostats poll-new;
           if [ $((TICK % 4)) -eq 0 ]; then
             if [ $((DAY % 7)) -eq 0 ]; then
-              geostats poll-full;
+              geostats poll-discover;
             else
               geostats poll-top --limit 2000;
             fi;
