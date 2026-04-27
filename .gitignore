@@ -29,9 +29,6 @@ env/
 .coverage
 htmlcov/
 
-# Tailwind output (generated)
-src/geostats/api/static/app.css
-
 # Node (only used locally for tailwind CLI)
 node_modules/
 
