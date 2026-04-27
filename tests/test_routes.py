@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock
 
 import pytest
@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from geostats.api.app import create_app
 from geostats.api.deps import get_db, get_geo_client
-from geostats.client import GeoClient
+from geostats.client import GeoClient, SearchResult
 from geostats.models import Account, RatingSnapshot
 
 
@@ -27,7 +27,7 @@ def client(db: Session, mock_geo_client: AsyncMock) -> TestClient:
 
 
 def _now() -> datetime:
-    return datetime.now(tz=timezone.utc)
+    return datetime.now(tz=UTC)
 
 
 def _account(
@@ -182,3 +182,39 @@ def test_series_invalid_mode_returns_422(client: TestClient, db: Session) -> Non
     db.flush()
     r = client.get("/api/profile/abcdefghij1234567890/series?mode=invalid")
     assert r.status_code == 422
+
+
+def test_lookup_by_nick_creates_account(
+    client: TestClient, db: Session, mock_geo_client: AsyncMock
+) -> None:
+    mock_geo_client.search_user.return_value = [
+        SearchResult(user_id="abcdefghij1234567890", nick="RealNick")
+    ]
+    r = client.post("/lookup", data={"profile": "RealNick"}, follow_redirects=False)
+    assert r.status_code == 303
+    assert r.headers["location"] == "/profile/abcdefghij1234567890"
+    acc = db.get(Account, "abcdefghij1234567890")
+    assert acc is not None
+    assert acc.nick == "RealNick"
+
+
+def test_lookup_unknown_nick_returns_400(client: TestClient) -> None:
+    # mock_geo_client already returns [] by default
+    r = client.post("/lookup", data={"profile": "unknownxyz"})
+    assert r.status_code == 400
+    assert "GeoStats" in r.text
+
+
+def test_lookup_increments_lookup_count(
+    client: TestClient, db: Session
+) -> None:
+    acc = _account()
+    db.add(acc)
+    db.flush()
+    client.post(
+        "/lookup",
+        data={"profile": "abcdefghij1234567890"},
+        follow_redirects=False,
+    )
+    db.refresh(acc)
+    assert acc.lookup_count == 1
