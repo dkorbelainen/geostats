@@ -148,6 +148,18 @@ def test_profile_invalid_id_returns_404(client: TestClient) -> None:
     assert r.status_code == 404
 
 
+def test_profile_visit_increments_lookup_count(
+    client: TestClient, db: Session
+) -> None:
+    acc = _account(polled=True)
+    db.add(acc)
+    db.add(_snap("abcdefghij1234567890", rating=2000))
+    db.flush()
+    client.get("/profile/abcdefghij1234567890")
+    db.refresh(acc)
+    assert acc.lookup_count == 1
+
+
 # ── /api/profile/{id}/series ──────────────────────────────────────────────────
 
 def test_series_returns_points(client: TestClient, db: Session) -> None:

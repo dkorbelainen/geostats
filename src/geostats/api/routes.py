@@ -169,6 +169,9 @@ async def profile_page(
     if account is None:
         raise HTTPException(status_code=404)
 
+    account.lookup_count += 1
+    db.commit()
+
     if account.last_polled_at is None:
         return templates.TemplateResponse(
             request,
