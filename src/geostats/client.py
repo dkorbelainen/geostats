@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
+from collections.abc import Callable
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field
@@ -96,19 +97,37 @@ class SearchResult(BaseModel):
 
 
 class GeoClient:
-    def __init__(self, ncfa_cookie: str) -> None:
+    def __init__(
+        self,
+        ncfa_cookie: str,
+        on_cookie_change: Callable[[str], None] | None = None,
+    ) -> None:
         self._client = httpx.AsyncClient(
             base_url=_BASE,
-            headers={**_HEADERS, "Cookie": f"_ncfa={ncfa_cookie}"},
+            headers=_HEADERS,
+            cookies={"_ncfa": ncfa_cookie},
             timeout=30.0,
             follow_redirects=True,
         )
+        self._on_cookie_change = on_cookie_change
+        self._last_ncfa = ncfa_cookie
 
     async def __aenter__(self) -> GeoClient:
         return self
 
     async def __aexit__(self, *_: object) -> None:
+        self._sync_cookie()
         await self._client.aclose()
+
+    def _sync_cookie(self) -> None:
+        current = self._client.cookies.get("_ncfa")
+        if current and current != self._last_ncfa:
+            self._last_ncfa = current
+            if self._on_cookie_change:
+                try:
+                    self._on_cookie_change(current)
+                except Exception as exc:
+                    log.warning("ncfa persist callback failed: %s", exc)
 
     async def _get(self, url: str, **kwargs: object) -> httpx.Response:
         """GET with 429 backoff retry."""
@@ -120,9 +139,10 @@ class GeoClient:
                 await asyncio.sleep(wait)
                 continue
             r.raise_for_status()
+            self._sync_cookie()
             return r
         r.raise_for_status()
-        return r  # type: ignore[return-value]
+        return r
 
     async def get_user_info(self, user_id: str) -> UserInfo:
         r = await self._get(f"/api/v3/users/{user_id}")

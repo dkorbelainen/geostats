@@ -11,6 +11,11 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from geostats.client import GeoClient
 from geostats.db import session_scope
 from geostats.models import Account, RatingSnapshot
+from geostats.state import set_ncfa
+
+
+def _make_client(ncfa_cookie: str) -> GeoClient:
+    return GeoClient(ncfa_cookie, on_cookie_change=set_ncfa)
 
 log = logging.getLogger(__name__)
 
@@ -128,7 +133,7 @@ async def _run_poll(
 
 
 async def run_discover(ncfa_cookie: str) -> None:
-    async with GeoClient(ncfa_cookie) as client:
+    async with _make_client(ncfa_cookie) as client:
         ids = await discover_leaderboard(client, limit=100)
     log.info("discovered %d rated players", len(ids))
     new_ids = _upsert_accounts(ids)
@@ -138,7 +143,7 @@ async def run_discover(ncfa_cookie: str) -> None:
 async def run_full_poll(ncfa_cookie: str, delay: float) -> None:
     from geostats.ranker import compute_ranks  # noqa: PLC0415
 
-    async with GeoClient(ncfa_cookie) as client:
+    async with _make_client(ncfa_cookie) as client:
         ids = await discover_leaderboard(client, limit=100)
         log.info("discovered %d rated players", len(ids))
         new_ids = _upsert_accounts(ids)
@@ -170,7 +175,7 @@ async def run_new_poll(ncfa_cookie: str, delay: float) -> None:
     if not new_ids:
         return
 
-    async with GeoClient(ncfa_cookie) as client:
+    async with _make_client(ncfa_cookie) as client:
         await _run_poll(client, new_ids, delay, set(new_ids))  # all new → fetch info
 
     with session_scope() as db:
@@ -210,7 +215,7 @@ async def run_top_poll(ncfa_cookie: str, delay: float, limit: int) -> None:
             .all()
         }
 
-    async with GeoClient(ncfa_cookie) as client:
+    async with _make_client(ncfa_cookie) as client:
         await _run_poll(client, all_ids, delay, no_pin)
 
     with session_scope() as db:
