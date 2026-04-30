@@ -222,10 +222,10 @@ def test_lookup_by_nick_creates_account(
     ]
     r = client.post("/lookup", data={"profile": "RealNick"}, follow_redirects=False)
     assert r.status_code == 303
-    assert r.headers["location"] == "/profile/abcdefghij1234567890"
     acc = db.get(Account, "abcdefghij1234567890")
     assert acc is not None
     assert acc.nick == "RealNick"
+    assert r.headers["location"] == f"/profile/{acc.slug or 'abcdefghij1234567890'}"
 
 
 def test_lookup_unknown_nick_returns_400(client: TestClient) -> None:

@@ -94,7 +94,8 @@ body {
 }
 .avatar-placeholder {
   background: linear-gradient(135deg, #2a2a4a, #1a1a32);
-  display: flex; align-items: center; justify-content: center; font-size: 24px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 44px; line-height: 1; overflow: hidden;
 }
 .header-info h1 { font-size: 20px; font-weight: 700; margin-bottom: 5px; color: #fff; }
 .header-meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
@@ -217,7 +218,7 @@ body {
 .pop-avatar-ph {
   width: 40px; height: 40px; border-radius: 50%; display: flex;
   align-items: center; justify-content: center;
-  background: var(--surface-raised); font-size: 18px;
+  background: var(--surface-raised); font-size: 32px; line-height: 1; overflow: hidden;
   border: 2px solid rgba(167,139,250,.35);
   box-shadow: 0 0 0 3px rgba(167,139,250,.1);
 }
@@ -291,9 +292,11 @@ body {
 .autocomplete-list li {
   padding: 10px 16px; cursor: pointer; font-size: 13px;
   color: var(--text-primary); transition: background .1s;
+  display: flex; justify-content: space-between; align-items: center;
 }
 .autocomplete-list li:hover { background: var(--surface-raised); }
 .autocomplete-list li:not(:last-child) { border-bottom: 1px solid var(--border); }
+.ac-rating { color: var(--amethyst); font-size: 12px; font-weight: 600; }
 
 /* ── Chart tooltip ── */
 #chart-tooltip {
