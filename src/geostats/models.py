@@ -11,6 +11,7 @@ class Account(Base):
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     nick: Mapped[str] = mapped_column(Text)
+    slug: Mapped[str | None] = mapped_column(Text, unique=True, default=None)
     country_code: Mapped[str | None] = mapped_column(Text, default=None)
     level: Mapped[int | None] = mapped_column(Integer, default=None)
     is_pro: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -26,6 +27,7 @@ class Account(Base):
         id: str,
         nick: str,
         created_at: datetime,
+        slug: str | None = None,
         country_code: str | None = None,
         level: int | None = None,
         is_pro: bool = False,
@@ -37,6 +39,7 @@ class Account(Base):
     ):
         self.id = id
         self.nick = nick
+        self.slug = slug
         self.created_at = created_at
         self.country_code = country_code
         self.level = level

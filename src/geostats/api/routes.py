@@ -35,6 +35,19 @@ def parse_user_id(value: str) -> str:
     raise LookupError(f"invalid user id or url: {value!r}")
 
 
+def _assign_slug(db: Session, account: Account) -> None:
+    base = account.nick.lower()
+    slug = base
+    n = 2
+    while (
+        db.query(Account).filter(Account.slug == slug, Account.id != account.id).first()
+        is not None
+    ):
+        slug = f"{base}{n}"
+        n += 1
+    account.slug = slug
+
+
 def _fmt_rating(v: object) -> str:
     if not isinstance(v, int):
         return "—"
@@ -171,25 +184,29 @@ async def lookup(
         db.add(account)
     elif nick is not None:
         account.nick = nick
+    if account.slug is None:
+        _assign_slug(db, account)
     account.lookup_count += 1
     db.commit()
 
-    return RedirectResponse(url=f"/profile/{user_id}", status_code=303)
+    return RedirectResponse(url=f"/profile/{account.slug or user_id}", status_code=303)
 
 
-@router.get("/profile/{user_id}")
+@router.get("/profile/{profile_ref}")
 async def profile_page(
-    user_id: str,
+    profile_ref: str,
     request: Request,
     forecast: int = Query(default=30, ge=1, le=365),
     db: Session = Depends(get_db),  # noqa: B008
 ) -> Response:
-    try:
-        parse_user_id(user_id)
-    except LookupError:
-        raise HTTPException(status_code=404) from None
+    if len(profile_ref) > 100:
+        raise HTTPException(status_code=404)
 
-    account = db.get(Account, user_id)
+    account = db.get(Account, profile_ref)
+    if account is None:
+        account = (
+            db.query(Account).filter(Account.slug == profile_ref.lower()).first()
+        )
     if account is None:
         raise HTTPException(status_code=404)
 
@@ -205,7 +222,7 @@ async def profile_page(
 
     snaps: list[RatingSnapshot] = (
         db.query(RatingSnapshot)
-        .filter(RatingSnapshot.account_id == user_id)
+        .filter(RatingSnapshot.account_id == account.id)
         .order_by(RatingSnapshot.captured_at.asc())
         .all()
     )
@@ -243,11 +260,22 @@ async def profile_page(
 async def search_accounts(
     q: str = Query(default=""),
     db: Session = Depends(get_db),  # noqa: B008
-) -> list[dict[str, str]]:
+) -> list[dict[str, object]]:
     if len(q) < 2:
         return []
-    results = (
-        db.query(Account.id, Account.nick)
+    latest_snap_sq = (
+        db.query(func.max(RatingSnapshot.captured_at))
+        .filter(RatingSnapshot.account_id == Account.id)
+        .correlate(Account)
+        .scalar_subquery()
+    )
+    rows = (
+        db.query(Account, RatingSnapshot)
+        .outerjoin(
+            RatingSnapshot,
+            (RatingSnapshot.account_id == Account.id)
+            & (RatingSnapshot.captured_at == latest_snap_sq),
+        )
         .filter(
             Account.nick.ilike(f"%{q}%"),
             Account.last_polled_at.isnot(None),
@@ -256,7 +284,15 @@ async def search_accounts(
         .limit(8)
         .all()
     )
-    return [{"id": r.id, "nick": r.nick} for r in results]
+    return [
+        {
+            "id": row.Account.id,
+            "nick": row.Account.nick,
+            "slug": row.Account.slug,
+            "rating": row.RatingSnapshot.rating if row.RatingSnapshot else None,
+        }
+        for row in rows
+    ]
 
 
 @router.get("/api/profile/{user_id}/series")

@@ -18,7 +18,6 @@
     (function() {
       const input = document.getElementById('profile-input');
       const list = document.getElementById('autocomplete-list');
-      const form = document.getElementById('lookup-form');
       let timer;
       input.addEventListener('input', () => {
         clearTimeout(timer);
@@ -30,15 +29,13 @@
             if (!r.ok) return;
             const data = await r.json();
             list.innerHTML = data.map(u =>
-              `<li data-id="${u.id}">${u.nick}</li>`
+              `<li data-dest="${encodeURIComponent(u.slug || u.id)}">${u.nick}${u.rating != null ? '<span class="ac-rating">' + u.rating.toLocaleString() + '</span>' : ''}</li>`
             ).join('');
             list.classList.toggle('open', data.length > 0);
             list.querySelectorAll('li').forEach(li => {
               li.addEventListener('mousedown', e => {
                 e.preventDefault();
-                input.value = li.dataset.id;
-                list.classList.remove('open');
-                form.submit();
+                window.location.href = '/profile/' + li.dataset.dest;
               });
             });
           } catch (_) {}
@@ -53,11 +50,11 @@
     <p class="popular-label">Most searched</p>
     <div class="popular-grid">
       {% for acc, snap in top_profiles %}
-      <a class="pop-card" href="/profile/{{ acc.id }}">
+      <a class="pop-card" href="/profile/{{ acc.slug or acc.id }}">
         {% if acc.pin_url %}
         <img class="pop-avatar" src="{{ acc.pin_url }}" alt="">
         {% else %}
-        <div class="pop-avatar pop-avatar-ph">🌎</div>
+        <div class="pop-avatar pop-avatar-ph">{{ acc.country_code | country_flag if acc.country_code else '🌎' }}</div>
         {% endif %}
         <div class="pop-nick">{{ acc.nick }}</div>
         {% if acc.country_code %}

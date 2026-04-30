@@ -20,10 +20,10 @@
         {% if acc.pin_url %}
         <img class="avatar-pin" src="{{ acc.pin_url }}" alt="">
         {% else %}
-        <div class="avatar-pin avatar-placeholder">🌎</div>
+        <div class="avatar-pin avatar-placeholder">{{ acc.country_code | country_flag if acc.country_code else '🌎' }}</div>
         {% endif %}
         <div class="header-info">
-          <h1>{{ acc.nick }}</h1>
+          <h1>{{ acc.nick }}{% if acc.id == '61b24b1554e5b6000108c190' %} 🔥{% endif %}</h1>
           <div class="header-meta">
             {% if acc.country_code %}
             <span class="meta-txt">{{ acc.country_code | country_flag }} {{ acc.country_code }}</span>
