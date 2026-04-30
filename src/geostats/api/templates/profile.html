@@ -121,7 +121,7 @@
       {% endfor %}
     </div>
 
-    <p class="section-label" id="stats-label">Stats — Overall</p>
+    <p class="section-label">Stats</p>
     <div class="stats-grid">
       <div class="stat-card">
         <div class="stat-label">Games played</div>
@@ -247,7 +247,6 @@ function selectMode(card, label, mode) {
   card.classList.add("active");
   currentMode = mode;
   document.getElementById("chart-mode-name").textContent = label;
-  document.getElementById("stats-label").textContent = `Stats — ${label}`;
   fetchAndDraw(currentMode, currentRange);
 }
 
