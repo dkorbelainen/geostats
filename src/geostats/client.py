@@ -102,10 +102,12 @@ class GeoClient:
         ncfa_cookie: str,
         on_cookie_change: Callable[[str], None] | None = None,
     ) -> None:
+        cookies = httpx.Cookies()
+        cookies.set("_ncfa", ncfa_cookie, domain=".geoguessr.com", path="/")
         self._client = httpx.AsyncClient(
             base_url=_BASE,
             headers=_HEADERS,
-            cookies={"_ncfa": ncfa_cookie},
+            cookies=cookies,
             timeout=30.0,
             follow_redirects=True,
         )
@@ -120,7 +122,15 @@ class GeoClient:
         await self._client.aclose()
 
     def _sync_cookie(self) -> None:
-        current = self._client.cookies.get("_ncfa")
+        jar = self._client.cookies.jar
+        ncfa = [c for c in jar if c.name == "_ncfa"]
+        if len(ncfa) > 1:
+            latest = ncfa[-1]
+            for c in ncfa[:-1]:
+                jar.clear(c.domain, c.path, c.name)
+            current = latest.value
+        else:
+            current = ncfa[0].value if ncfa else None
         if current and current != self._last_ncfa:
             self._last_ncfa = current
             if self._on_cookie_change:
