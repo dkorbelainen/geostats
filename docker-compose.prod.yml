@@ -46,7 +46,6 @@ services:
       sh -c "
         DAY=0; TICK=0;
         while true; do
-          geostats poll-new;
           if [ $((TICK % 4)) -eq 0 ]; then
             if [ $((DAY % 7)) -eq 0 ]; then
               geostats poll-discover;
@@ -55,6 +54,7 @@ services:
             fi;
             DAY=$((DAY + 1));
           fi;
+          geostats poll-new --limit 500;
           TICK=$((TICK + 1));
           sleep $((21600 + RANDOM % 2400 - 1200));
         done"

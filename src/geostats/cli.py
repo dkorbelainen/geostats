@@ -63,11 +63,18 @@ def poll_discover() -> None:
 
 
 @cli.command("poll-new")
-def poll_new() -> None:
+@click.option(
+    "--limit",
+    default=None,
+    type=int,
+    help="Max accounts per cycle (newest first); omit for unbounded",
+)
+def poll_new(limit: int | None) -> None:
     cookie = _require_ncfa()
     settings = get_settings()
     from geostats.poller import run_new_poll  # noqa: PLC0415
     asyncio.run(run_new_poll(
         ncfa_cookie=cookie,
         delay=settings.poll_request_delay_sec,
+        limit=limit,
     ))
