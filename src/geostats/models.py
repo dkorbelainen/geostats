@@ -16,6 +16,7 @@ class Account(Base):
     level: Mapped[int | None] = mapped_column(Integer, default=None)
     is_pro: Mapped[bool] = mapped_column(Boolean, default=False)
     pin_url: Mapped[str | None] = mapped_column(Text, default=None)
+    avatar_url: Mapped[str | None] = mapped_column(Text, default=None)
     tracked: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     last_polled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
@@ -32,6 +33,7 @@ class Account(Base):
         level: int | None = None,
         is_pro: bool = False,
         pin_url: str | None = None,
+        avatar_url: str | None = None,
         tracked: bool = True,
         last_polled_at: datetime | None = None,
         last_error: str | None = None,
@@ -45,6 +47,7 @@ class Account(Base):
         self.level = level
         self.is_pro = is_pro
         self.pin_url = pin_url
+        self.avatar_url = avatar_url
         self.tracked = tracked
         self.last_polled_at = last_polled_at
         self.last_error = last_error
