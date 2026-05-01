@@ -101,7 +101,7 @@ def _flag_img(code: object) -> Markup:
     if code.upper() == "ZZ":
         return Markup(_ZZ_GLOBE)
     cc = code.lower()
-    return Markup(f'<img class="flag-img" src="https://flagcdn.com/w40/{cc}.png" alt="{code.upper()}">')
+    return Markup(f'<img class="flag-img" src="https://flagcdn.com/{cc}.svg" alt="{code.upper()}">')
 
 
 def _time_ago(dt: object) -> str:
