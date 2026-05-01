@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from geostats.api.deps import get_db, get_geo_client
 from geostats.client import GeoClient
-from geostats.models import Account, RatingSnapshot
+from geostats.models import Account, PlayerMatch, RatingSnapshot
 from geostats.stats.aggregates import summarize_profile
 from geostats.stats.forecast import ForecastResult, forecast_rating
 from geostats.stats.series import get_series
@@ -236,6 +236,14 @@ async def profile_page(
 
     summary = summarize_profile(account, snaps, total_tracked=total_tracked)
 
+    pm = db.get(PlayerMatch, account.id)
+    doppel: dict[str, Account | int | None] = {
+        "global": db.get(Account, pm.global_match_id) if pm and pm.global_match_id else None,
+        "global_sim": pm.global_similarity if pm else None,
+        "country": db.get(Account, pm.country_match_id) if pm and pm.country_match_id else None,
+        "country_sim": pm.country_similarity if pm else None,
+    }
+
     fc_7d = forecast_rating(snaps, "overall", 7)
     fc_30d = forecast_rating(snaps, "overall", 30)
     fc_custom: ForecastResult | None = (
@@ -252,6 +260,7 @@ async def profile_page(
             "fc_30d": fc_30d,
             "fc_custom": fc_custom,
             "forecast_horizon": forecast,
+            "doppel": doppel,
         },
     )
 
