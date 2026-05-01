@@ -170,6 +170,33 @@
       {% endfor %}
     </div>
 
+    {% if doppel and (doppel.global or doppel.country) %}
+    <p class="section-label">Doppelgängers</p>
+    <div class="doppel-grid">
+      {% for d_key, d_label in [("global", "Global"), ("country", "In " ~ (acc.country_code or "country"))] %}
+      {% set d_acc = doppel[d_key] %}
+      {% set d_sim = doppel[d_key ~ "_sim"] %}
+      {% if d_acc %}
+      <a class="doppel-card" href="/profile/{{ d_acc.slug or d_acc.id }}">
+        <div class="doppel-label">{{ d_label }}</div>
+        <div class="doppel-row">
+          {% if d_acc.pin_url %}
+          <img class="doppel-pin" src="{{ d_acc.pin_url }}" alt="">
+          {% else %}
+          <div class="doppel-pin doppel-pin-ph">{{ d_acc.country_code | country_flag if d_acc.country_code else '🌎' }}</div>
+          {% endif %}
+          <div class="doppel-info">
+            <div class="doppel-nick">{{ d_acc.nick }}</div>
+            <div class="doppel-meta">{% if d_acc.country_code %}{{ d_acc.country_code | country_flag }} {{ d_acc.country_code }}{% endif %}</div>
+          </div>
+          <div class="doppel-sim">{{ d_sim }}%</div>
+        </div>
+      </a>
+      {% endif %}
+      {% endfor %}
+    </div>
+    {% endif %}
+
     <p class="section-label">Forecast (Overall)</p>
     <div class="forecast-grid">
       {% for fc, label in [(fc_7d, "7 days"), (fc_30d, "30 days")] + ([(fc_custom, forecast_horizon ~ " days")] if fc_custom is not none else []) %}

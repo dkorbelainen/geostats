@@ -62,6 +62,17 @@ def poll_discover() -> None:
     asyncio.run(run_discover(ncfa_cookie=cookie))
 
 
+@cli.command("compute-matches")
+def compute_matches_cmd() -> None:
+    """Recompute doppelganger matches for all tracked accounts."""
+    session_factory()
+    from geostats.db import session_scope  # noqa: PLC0415
+    from geostats.stats.doppelganger import compute_matches  # noqa: PLC0415
+    with session_scope() as db:
+        n = compute_matches(db)
+    click.echo(f"computed matches for {n} players")
+
+
 @cli.command("poll-new")
 @click.option(
     "--limit",

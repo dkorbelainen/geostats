@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, Text, func
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, SmallInteger, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from geostats.db import Base
@@ -92,3 +92,20 @@ class RatingSnapshot(Base):
     position_nomove: Mapped[int | None] = mapped_column(Integer)
     position_nmpz: Mapped[int | None] = mapped_column(Integer)
     position_country: Mapped[int | None] = mapped_column(Integer)
+
+
+class PlayerMatch(Base):
+    __tablename__ = "player_matches"
+
+    account_id: Mapped[str] = mapped_column(
+        Text, ForeignKey("accounts.id", ondelete="CASCADE"), primary_key=True
+    )
+    global_match_id: Mapped[str | None] = mapped_column(
+        Text, ForeignKey("accounts.id", ondelete="SET NULL"), default=None
+    )
+    global_similarity: Mapped[int | None] = mapped_column(SmallInteger, default=None)
+    country_match_id: Mapped[str | None] = mapped_column(
+        Text, ForeignKey("accounts.id", ondelete="SET NULL"), default=None
+    )
+    country_similarity: Mapped[int | None] = mapped_column(SmallInteger, default=None)
+    computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
