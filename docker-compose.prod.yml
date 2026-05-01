@@ -50,6 +50,7 @@ services:
             geostats poll-top --limit 500;
             if [ $((TICK % 28)) -eq 0 ]; then
               geostats poll-discover;
+              geostats compute-matches;
             fi;
           else
             geostats poll-new --limit 100;
