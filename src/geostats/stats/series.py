@@ -27,9 +27,10 @@ def get_series(
         _now = now if now is not None else datetime.now(tz=UTC)
         cutoff = _now - timedelta(days=days)
         filtered = [s for s in snaps if s.captured_at >= cutoff]
-    result: list[tuple[str, int]] = []
+    # snaps sorted ascending → later value overwrites earlier for same day
+    seen: dict[str, int] = {}
     for snap in filtered:
         v = getattr(snap, attr)
         if v is not None:
-            result.append((snap.captured_at.date().isoformat(), v))
-    return result
+            seen[snap.captured_at.date().isoformat()] = v
+    return list(seen.items())
