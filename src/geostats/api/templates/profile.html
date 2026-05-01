@@ -26,7 +26,7 @@
           <h1>{{ acc.nick }}{% if acc.id == '61b24b1554e5b6000108c190' %} 🔥{% endif %}</h1>
           <div class="header-meta">
             {% if acc.country_code %}
-            <span class="meta-txt">{{ acc.country_code | flag_img }} {{ acc.country_code }}</span>
+            <span class="meta-txt">{{ acc.country_code | country_flag }} {{ acc.country_code }}</span>
             {% endif %}
             {% if not collecting and summary.snaps %}
             {% set latest = summary.snaps[-1] %}
