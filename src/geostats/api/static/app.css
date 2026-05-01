@@ -104,6 +104,10 @@ body {
   border-radius: 20px; padding: 2px 9px; font-size: 11px; color: var(--gold);
 }
 .meta-txt { color: rgba(255,255,255,.5); font-size: 12px; }
+.flag-img { height: 13px; width: auto; vertical-align: -2px; }
+.avatar-placeholder .flag-img { height: 32px; }
+.pop-avatar-ph .flag-img { height: 28px; }
+.doppel-pin-ph .flag-img { height: 22px; }
 
 /* ── Content area ── */
 .content { padding: 0 20px; }

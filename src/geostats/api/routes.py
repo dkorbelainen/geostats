@@ -6,6 +6,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
+from markupsafe import Markup
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -82,6 +83,13 @@ def _country_flag(code: object) -> str:
     return "".join(chr(0x1F1E6 - 65 + ord(c.upper())) for c in code)
 
 
+def _flag_img(code: object) -> Markup:
+    if not isinstance(code, str) or len(code) != _CC_LEN:
+        return Markup("")
+    cc = code.lower()
+    return Markup(f'<img class="flag-img" src="https://flagcdn.com/w40/{cc}.png" alt="{code.upper()}">')
+
+
 def _time_ago(dt: object) -> str:
     if not isinstance(dt, datetime):
         return "unknown"
@@ -124,6 +132,7 @@ templates.env.filters["fmt_rating"] = _fmt_rating
 templates.env.filters["fmt_delta"] = _fmt_delta
 templates.env.filters["fmt_rank"] = _fmt_rank
 templates.env.filters["country_flag"] = _country_flag
+templates.env.filters["flag_img"] = _flag_img
 templates.env.filters["time_ago"] = _time_ago
 templates.env.globals["getattr"] = getattr
 

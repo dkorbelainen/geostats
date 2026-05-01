@@ -28,7 +28,7 @@
             const r = await fetch('/api/search?q=' + encodeURIComponent(q));
             if (!r.ok) return;
             const data = await r.json();
-            const flag = cc => cc ? String.fromCodePoint(...[...cc.toUpperCase()].map(c => 0x1F1E6 - 65 + c.charCodeAt(0))) : '';
+            const flag = cc => cc ? `<img class="flag-img" src="https://flagcdn.com/w20/${cc.toLowerCase()}.png" alt="${cc.toUpperCase()}" style="height:1em;vertical-align:-2px">` : '';
             list.innerHTML = data.map(u =>
               `<li data-dest="${encodeURIComponent(u.slug || u.id)}">${u.nick}${u.country_code ? ' ' + flag(u.country_code) : ''}${u.rating != null ? '<span class="ac-rating">' + u.rating.toLocaleString() + '</span>' : ''}</li>`
             ).join('');
@@ -55,11 +55,11 @@
         {% if acc.avatar_url %}
         <img class="pop-avatar" src="{{ acc.avatar_url }}" alt="">
         {% else %}
-        <div class="pop-avatar pop-avatar-ph">{{ acc.country_code | country_flag if acc.country_code else '🌎' }}</div>
+        <div class="pop-avatar pop-avatar-ph">{{ acc.country_code | flag_img if acc.country_code else '🌎' }}</div>
         {% endif %}
         <div class="pop-nick">{{ acc.nick }}</div>
         {% if acc.country_code %}
-        <div class="pop-country">{{ acc.country_code | country_flag }} {{ acc.country_code }}</div>
+        <div class="pop-country">{{ acc.country_code | flag_img }} {{ acc.country_code }}</div>
         {% endif %}
         <div class="pop-rating">{{ snap.rating | fmt_rating }}</div>
       </a>
