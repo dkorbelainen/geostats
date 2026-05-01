@@ -59,7 +59,13 @@ def poll_discover() -> None:
 
 
 @cli.command("poll-new")
-def poll_new() -> None:
+@click.option(
+    "--limit",
+    default=None,
+    type=int,
+    help="Max number of new accounts to poll in this run (newest first)",
+)
+def poll_new(limit: int | None) -> None:
     settings = get_settings()
     if not settings.geoguessr_ncfa_cookie:
         raise click.ClickException("GEOGUESSR_NCFA_COOKIE is not set")
@@ -68,4 +74,5 @@ def poll_new() -> None:
     asyncio.run(run_new_poll(
         ncfa_cookie=settings.geoguessr_ncfa_cookie,
         delay=settings.poll_request_delay_sec,
+        limit=limit,
     ))

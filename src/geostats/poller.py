@@ -148,17 +148,20 @@ async def run_full_poll(ncfa_cookie: str, delay: float) -> None:
     log.info("ranks computed")
 
 
-async def run_new_poll(ncfa_cookie: str, delay: float) -> None:
+async def run_new_poll(ncfa_cookie: str, delay: float, limit: int | None = None) -> None:
     from geostats.ranker import compute_ranks  # noqa: PLC0415
 
     with session_scope() as db:
-        new_ids = [
-            row.id for row in db.query(Account.id)
+        q = (
+            db.query(Account.id)
             .filter(Account.tracked == True, Account.last_polled_at.is_(None))  # noqa: E712
-            .all()
-        ]
+            .order_by(Account.created_at.desc())
+        )
+        if limit is not None:
+            q = q.limit(limit)
+        new_ids = [row.id for row in q.all()]
 
-    log.info("new accounts to poll: %d", len(new_ids))
+    log.info("new accounts to poll: %d (limit=%s)", len(new_ids), limit)
     if not new_ids:
         return
 
