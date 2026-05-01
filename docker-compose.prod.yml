@@ -44,17 +44,16 @@ services:
     restart: unless-stopped
     command: >
       sh -c "
-        DAY=0; TICK=0;
+        TICK=0;
         while true; do
           if [ $((TICK % 4)) -eq 0 ]; then
-            if [ $((DAY % 7)) -eq 0 ]; then
+            geostats poll-top --limit 500;
+            if [ $((TICK % 28)) -eq 0 ]; then
               geostats poll-discover;
-            else
-              geostats poll-top --limit 500;
             fi;
-            DAY=$((DAY + 1));
+          else
+            geostats poll-new --limit 100;
           fi;
-          geostats poll-new --limit 500;
           TICK=$((TICK + 1));
           sleep $((21600 + RANDOM % 2400 - 1200));
         done"
