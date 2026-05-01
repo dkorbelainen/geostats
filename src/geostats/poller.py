@@ -94,7 +94,14 @@ def _upsert_accounts(ids: list[str]) -> set[str]:
 async def _run_poll(
     client: GeoClient, account_ids: list[str], delay: float, fetch_info_ids: set[str]
 ) -> None:
-    ids = list(account_ids)
+    today_utc = datetime.now(UTC).date()
+    with session_scope() as db:
+        rows = db.query(Account.id, Account.last_polled_at).filter(Account.id.in_(account_ids)).all()
+    polled_today = {r.id for r in rows if r.last_polled_at is not None and r.last_polled_at.date() == today_utc}
+
+    ids = [aid for aid in account_ids if aid not in polled_today]
+    if polled_today:
+        log.debug("skipping %d accounts already polled today", len(polled_today))
     random.shuffle(ids)
     next_break = random.randint(30, 60)
     for i, account_id in enumerate(ids):
