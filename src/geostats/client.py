@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
+from collections.abc import Callable
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field
@@ -11,7 +12,7 @@ _BASE = "https://www.geoguessr.com"
 _UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/124.0.0.0 Safari/537.36"
+    "Chrome/136.0.0.0 Safari/537.36"
 )
 _HEADERS = {
     "User-Agent": _UA,
@@ -19,6 +20,12 @@ _HEADERS = {
     "Accept-Language": "en-US,en;q=0.9",
     "Referer": "https://www.geoguessr.com/",
     "Origin": "https://www.geoguessr.com",
+    "sec-ch-ua": '"Chromium";v="136", "Google Chrome";v="136", "Not.A/Brand";v="99"',
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": '"Windows"',
+    "sec-fetch-dest": "empty",
+    "sec-fetch-mode": "cors",
+    "sec-fetch-site": "same-origin",
 }
 
 log = logging.getLogger(__name__)
@@ -90,19 +97,47 @@ class SearchResult(BaseModel):
 
 
 class GeoClient:
-    def __init__(self, ncfa_cookie: str) -> None:
+    def __init__(
+        self,
+        ncfa_cookie: str,
+        on_cookie_change: Callable[[str], None] | None = None,
+    ) -> None:
+        cookies = httpx.Cookies()
+        cookies.set("_ncfa", ncfa_cookie, domain=".geoguessr.com", path="/")
         self._client = httpx.AsyncClient(
             base_url=_BASE,
-            headers={**_HEADERS, "Cookie": f"_ncfa={ncfa_cookie}"},
+            headers=_HEADERS,
+            cookies=cookies,
             timeout=30.0,
             follow_redirects=True,
         )
+        self._on_cookie_change = on_cookie_change
+        self._last_ncfa = ncfa_cookie
 
     async def __aenter__(self) -> GeoClient:
         return self
 
     async def __aexit__(self, *_: object) -> None:
+        self._sync_cookie()
         await self._client.aclose()
+
+    def _sync_cookie(self) -> None:
+        jar = self._client.cookies.jar
+        ncfa = [c for c in jar if c.name == "_ncfa"]
+        if len(ncfa) > 1:
+            latest = ncfa[-1]
+            for c in ncfa[:-1]:
+                jar.clear(c.domain, c.path, c.name)
+            current = latest.value
+        else:
+            current = ncfa[0].value if ncfa else None
+        if current and current != self._last_ncfa:
+            self._last_ncfa = current
+            if self._on_cookie_change:
+                try:
+                    self._on_cookie_change(current)
+                except Exception as exc:
+                    log.warning("ncfa persist callback failed: %s", exc)
 
     async def _get(self, url: str, **kwargs: object) -> httpx.Response:
         """GET with 429 backoff retry."""
@@ -114,9 +149,10 @@ class GeoClient:
                 await asyncio.sleep(wait)
                 continue
             r.raise_for_status()
+            self._sync_cookie()
             return r
         r.raise_for_status()
-        return r  # type: ignore[return-value]
+        return r
 
     async def get_user_info(self, user_id: str) -> UserInfo:
         r = await self._get(f"/api/v3/users/{user_id}")

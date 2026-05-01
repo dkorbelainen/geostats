@@ -5,8 +5,19 @@ import click
 
 from geostats.config import get_settings
 from geostats.db import session_factory
+from geostats.state import get_ncfa
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+
+
+def _require_ncfa() -> str:
+    session_factory()
+    cookie = get_ncfa()
+    if not cookie:
+        raise click.ClickException(
+            "ncfa cookie not available; set GEOGUESSR_NCFA_COOKIE for first-run bootstrap"
+        )
+    return cookie
 
 
 @click.group()
@@ -16,13 +27,11 @@ def cli() -> None:
 
 @cli.command("poll-full")
 def poll_full() -> None:
+    cookie = _require_ncfa()
     settings = get_settings()
-    if not settings.geoguessr_ncfa_cookie:
-        raise click.ClickException("GEOGUESSR_NCFA_COOKIE is not set")
-    session_factory()
     from geostats.poller import run_full_poll  # noqa: PLC0415
     asyncio.run(run_full_poll(
-        ncfa_cookie=settings.geoguessr_ncfa_cookie,
+        ncfa_cookie=cookie,
         delay=settings.poll_request_delay_sec,
     ))
 
@@ -36,13 +45,11 @@ def poll_full() -> None:
     help="Number of top-rated accounts to poll",
 )
 def poll_top(limit: int) -> None:
+    cookie = _require_ncfa()
     settings = get_settings()
-    if not settings.geoguessr_ncfa_cookie:
-        raise click.ClickException("GEOGUESSR_NCFA_COOKIE is not set")
-    session_factory()
     from geostats.poller import run_top_poll  # noqa: PLC0415
     asyncio.run(run_top_poll(
-        ncfa_cookie=settings.geoguessr_ncfa_cookie,
+        ncfa_cookie=cookie,
         delay=settings.poll_request_delay_sec,
         limit=limit,
     ))
@@ -50,12 +57,9 @@ def poll_top(limit: int) -> None:
 
 @cli.command("poll-discover")
 def poll_discover() -> None:
-    settings = get_settings()
-    if not settings.geoguessr_ncfa_cookie:
-        raise click.ClickException("GEOGUESSR_NCFA_COOKIE is not set")
-    session_factory()
+    cookie = _require_ncfa()
     from geostats.poller import run_discover  # noqa: PLC0415
-    asyncio.run(run_discover(ncfa_cookie=settings.geoguessr_ncfa_cookie))
+    asyncio.run(run_discover(ncfa_cookie=cookie))
 
 
 @cli.command("poll-new")
@@ -63,16 +67,14 @@ def poll_discover() -> None:
     "--limit",
     default=None,
     type=int,
-    help="Max number of new accounts to poll in this run (newest first)",
+    help="Max accounts per cycle (newest first); omit for unbounded",
 )
 def poll_new(limit: int | None) -> None:
+    cookie = _require_ncfa()
     settings = get_settings()
-    if not settings.geoguessr_ncfa_cookie:
-        raise click.ClickException("GEOGUESSR_NCFA_COOKIE is not set")
-    session_factory()
     from geostats.poller import run_new_poll  # noqa: PLC0415
     asyncio.run(run_new_poll(
-        ncfa_cookie=settings.geoguessr_ncfa_cookie,
+        ncfa_cookie=cookie,
         delay=settings.poll_request_delay_sec,
         limit=limit,
     ))

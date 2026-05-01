@@ -3,8 +3,8 @@ from collections.abc import AsyncIterator, Iterator
 from sqlalchemy.orm import Session
 
 from geostats.client import GeoClient
-from geostats.config import get_settings
 from geostats.db import session_factory
+from geostats.state import get_ncfa, set_ncfa
 
 
 def get_db() -> Iterator[Session]:
@@ -16,6 +16,6 @@ def get_db() -> Iterator[Session]:
 
 
 async def get_geo_client() -> AsyncIterator[GeoClient]:
-    settings = get_settings()
-    async with GeoClient(ncfa_cookie=settings.geoguessr_ncfa_cookie or "") as client:
+    cookie = get_ncfa() or ""
+    async with GeoClient(ncfa_cookie=cookie, on_cookie_change=set_ncfa) as client:
         yield client
