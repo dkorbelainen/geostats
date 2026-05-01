@@ -17,8 +17,8 @@
         </div>
       </nav>
       <div class="header">
-        {% if acc.pin_url %}
-        <img class="avatar-pin" src="{{ acc.pin_url }}" alt="">
+        {% if acc.avatar_url %}
+        <img class="avatar-pin" src="{{ acc.avatar_url }}" alt="">
         {% else %}
         <div class="avatar-pin avatar-placeholder">{{ acc.country_code | country_flag if acc.country_code else '🌎' }}</div>
         {% endif %}
@@ -180,14 +180,14 @@
       <a class="doppel-card" href="/profile/{{ d_acc.slug or d_acc.id }}">
         <div class="doppel-label">{{ d_label }}</div>
         <div class="doppel-row">
-          {% if d_acc.pin_url %}
-          <img class="doppel-pin" src="{{ d_acc.pin_url }}" alt="">
+          {% if d_acc.avatar_url %}
+          <img class="doppel-pin" src="{{ d_acc.avatar_url }}" alt="">
           {% else %}
           <div class="doppel-pin doppel-pin-ph">{{ d_acc.country_code | country_flag if d_acc.country_code else '🌎' }}</div>
           {% endif %}
           <div class="doppel-info">
             <div class="doppel-nick">{{ d_acc.nick }}</div>
-            <div class="doppel-meta">{% if d_acc.country_code %}{{ d_acc.country_code | country_flag }} {{ d_acc.country_code }}{% endif %}</div>
+            <div class="doppel-meta">{% if d_acc.country_code %}{{ d_acc.country_code | country_flag }} {{ d_acc.country_code }}{% endif %}{% set d_rating = doppel[d_key ~ "_rating"] %}{% if d_rating %} — <span class="doppel-rating">{{ d_rating | fmt_rating }}</span>{% endif %}</div>
           </div>
           <div class="doppel-sim">{{ d_sim }}%</div>
         </div>

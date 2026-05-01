@@ -28,8 +28,9 @@
             const r = await fetch('/api/search?q=' + encodeURIComponent(q));
             if (!r.ok) return;
             const data = await r.json();
+            const flag = cc => cc ? String.fromCodePoint(...[...cc.toUpperCase()].map(c => 0x1F1E6 - 65 + c.charCodeAt(0))) : '';
             list.innerHTML = data.map(u =>
-              `<li data-dest="${encodeURIComponent(u.slug || u.id)}">${u.nick}${u.rating != null ? '<span class="ac-rating">' + u.rating.toLocaleString() + '</span>' : ''}</li>`
+              `<li data-dest="${encodeURIComponent(u.slug || u.id)}">${u.nick}${u.country_code ? ' ' + flag(u.country_code) : ''}${u.rating != null ? '<span class="ac-rating">' + u.rating.toLocaleString() + '</span>' : ''}</li>`
             ).join('');
             list.classList.toggle('open', data.length > 0);
             list.querySelectorAll('li').forEach(li => {
@@ -51,8 +52,8 @@
     <div class="popular-grid">
       {% for acc, snap in top_profiles %}
       <a class="pop-card" href="/profile/{{ acc.slug or acc.id }}">
-        {% if acc.pin_url %}
-        <img class="pop-avatar" src="{{ acc.pin_url }}" alt="">
+        {% if acc.avatar_url %}
+        <img class="pop-avatar" src="{{ acc.avatar_url }}" alt="">
         {% else %}
         <div class="pop-avatar pop-avatar-ph">{{ acc.country_code | country_flag if acc.country_code else '🌎' }}</div>
         {% endif %}
