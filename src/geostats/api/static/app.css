@@ -265,6 +265,7 @@ body {
 .doppel-info { flex: 1; min-width: 0; }
 .doppel-nick { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .doppel-meta { font-size: 11px; color: var(--text-secondary); }
+.doppel-rating { color: #c4b0fd; }
 .doppel-sim { color: var(--amethyst); font-weight: 700; font-size: 16px; }
 
 /* ── Site footer ── */

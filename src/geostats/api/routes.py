@@ -236,12 +236,25 @@ async def profile_page(
 
     summary = summarize_profile(account, snaps, total_tracked=total_tracked)
 
+    def _latest_rating(account_id: str | None) -> int | None:
+        if not account_id:
+            return None
+        return (
+            db.query(RatingSnapshot.rating)
+            .filter(RatingSnapshot.account_id == account_id, RatingSnapshot.rating.isnot(None))
+            .order_by(RatingSnapshot.captured_at.desc())
+            .limit(1)
+            .scalar()
+        )
+
     pm = db.get(PlayerMatch, account.id)
     doppel: dict[str, Account | int | None] = {
         "global": db.get(Account, pm.global_match_id) if pm and pm.global_match_id else None,
         "global_sim": pm.global_similarity if pm else None,
+        "global_rating": _latest_rating(pm.global_match_id if pm else None),
         "country": db.get(Account, pm.country_match_id) if pm and pm.country_match_id else None,
         "country_sim": pm.country_similarity if pm else None,
+        "country_rating": _latest_rating(pm.country_match_id if pm else None),
     }
 
     fc_7d = forecast_rating(snaps, "overall", 7)
@@ -298,6 +311,7 @@ async def search_accounts(
             "id": row.Account.id,
             "nick": row.Account.nick,
             "slug": row.Account.slug,
+            "country_code": row.Account.country_code,
             "rating": row.RatingSnapshot.rating if row.RatingSnapshot else None,
         }
         for row in rows
