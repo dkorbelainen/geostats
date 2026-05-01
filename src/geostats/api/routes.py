@@ -36,15 +36,22 @@ def parse_user_id(value: str) -> str:
     raise LookupError(f"invalid user id or url: {value!r}")
 
 
+def _slug_base(nick: str) -> str:
+    s = re.sub(r"[^a-zа-яё0-9_]", "", nick.lower().replace(" ", "_"))
+    return s.strip("_")
+
+
 def _assign_slug(db: Session, account: Account) -> None:
-    base = account.nick.lower()
+    base = _slug_base(account.nick)
+    if not base:
+        return
     slug = base
     n = 2
     while (
         db.query(Account).filter(Account.slug == slug, Account.id != account.id).first()
         is not None
     ):
-        slug = f"{base}{n}"
+        slug = f"{base}_{n}"
         n += 1
     account.slug = slug
 
@@ -77,15 +84,22 @@ _SECS_HOUR = 3600
 _SECS_DAY = 86400
 
 
+_ZZ_GLOBE = "🌎"
+
+
 def _country_flag(code: object) -> str:
     if not isinstance(code, str) or len(code) != _CC_LEN:
         return ""
+    if code.upper() == "ZZ":
+        return _ZZ_GLOBE
     return "".join(chr(0x1F1E6 - 65 + ord(c.upper())) for c in code)
 
 
 def _flag_img(code: object) -> Markup:
     if not isinstance(code, str) or len(code) != _CC_LEN:
         return Markup("")
+    if code.upper() == "ZZ":
+        return Markup(_ZZ_GLOBE)
     cc = code.lower()
     return Markup(f'<img class="flag-img" src="https://flagcdn.com/w40/{cc}.png" alt="{code.upper()}">')
 
