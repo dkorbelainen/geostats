@@ -109,3 +109,18 @@ class PlayerMatch(Base):
     )
     country_similarity: Mapped[int | None] = mapped_column(SmallInteger, default=None)
     computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class AccountAnomaly(Base):
+    __tablename__ = "account_anomalies"
+
+    account_id: Mapped[str] = mapped_column(
+        Text, ForeignKey("accounts.id", ondelete="CASCADE"), primary_key=True
+    )
+    score: Mapped[float] = mapped_column(Float)
+    confidence_pct: Mapped[int] = mapped_column(SmallInteger)
+    driver_1_feature: Mapped[str] = mapped_column(Text)
+    driver_1_z: Mapped[float] = mapped_column(Float)
+    driver_2_feature: Mapped[str | None] = mapped_column(Text, default=None)
+    driver_2_z: Mapped[float | None] = mapped_column(Float, default=None)
+    computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

@@ -305,3 +305,67 @@ def test_forecast_horizon_out_of_range_returns_422(
     db.flush()
     r = client.get("/api/profile/abcdefghij1234567890/forecast?horizon=999")
     assert r.status_code == 422
+
+
+# ── anomaly card ──────────────────────────────────────────────────────────────
+
+def test_profile_renders_anomaly_card(client, db) -> None:
+    from datetime import UTC, datetime
+    from geostats.models import Account, AccountAnomaly, RatingSnapshot
+
+    now = datetime.now(UTC)
+    db.add(Account(id="anomA", nick="anomA", slug="anoma", created_at=now,
+                   last_polled_at=now))
+    db.add(RatingSnapshot(
+        account_id="anomA", captured_at=now, rating=2500,
+        division_number=None, division_name=None,
+        rating_moving=None, rating_nomove=None, rating_nmpz=None,
+        win_streak=10, guessed_first_rate=0.7,
+        games_played=300, games_won=210, avg_guess_distance_km=80.0,
+        position_overall=None, position_moving=None, position_nomove=None,
+        position_nmpz=None, position_country=None,
+    ))
+    db.add(AccountAnomaly(
+        account_id="anomA", score=-0.2, confidence_pct=85,
+        driver_1_feature="peak_win_streak", driver_1_z=3.4,
+        driver_2_feature="mean_avg_guess_distance_km", driver_2_z=-2.1,
+        computed_at=now,
+    ))
+    db.commit()
+
+    resp = client.get("/profile/anoma")
+    assert resp.status_code == 200
+    body = resp.text
+    assert "Profile rarity" in body
+    assert "85%" in body
+    assert "Peak win streak" in body
+    assert "Average distance" in body
+
+
+def test_profile_hides_anomaly_card_below_threshold(client, db) -> None:
+    from datetime import UTC, datetime
+    from geostats.models import Account, AccountAnomaly, RatingSnapshot
+
+    now = datetime.now(UTC)
+    db.add(Account(id="quietA", nick="quietA", slug="quieta", created_at=now,
+                   last_polled_at=now))
+    db.add(RatingSnapshot(
+        account_id="quietA", captured_at=now, rating=1500,
+        division_number=None, division_name=None,
+        rating_moving=None, rating_nomove=None, rating_nmpz=None,
+        win_streak=2, guessed_first_rate=0.4,
+        games_played=200, games_won=100, avg_guess_distance_km=400.0,
+        position_overall=None, position_moving=None, position_nomove=None,
+        position_nmpz=None, position_country=None,
+    ))
+    db.add(AccountAnomaly(
+        account_id="quietA", score=0.05, confidence_pct=42,
+        driver_1_feature="mean_rating", driver_1_z=0.4,
+        driver_2_feature=None, driver_2_z=None,
+        computed_at=now,
+    ))
+    db.commit()
+
+    resp = client.get("/profile/quieta")
+    assert resp.status_code == 200
+    assert "Profile rarity" not in resp.text
