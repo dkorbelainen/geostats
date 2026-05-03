@@ -393,3 +393,25 @@ body {
   pointer-events: none; white-space: nowrap; z-index: 10;
   border: 1px solid var(--border);
 }
+
+/* ── Anomaly (Profile rarity) ── */
+.anomaly-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 14px 16px; margin-bottom: 14px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.anomaly-pct {
+  font-size: 28px; font-weight: 700; color: var(--amethyst);
+  letter-spacing: -.01em;
+}
+.anomaly-drivers { display: flex; flex-wrap: wrap; gap: 6px; }
+.anomaly-driver {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: rgba(167,139,250,.10);
+  border: 1px solid rgba(167,139,250,.25);
+  color: var(--text-secondary);
+  border-radius: 999px; padding: 3px 10px;
+  font-size: 12px;
+}
+.anomaly-arrow { font-weight: 700; color: var(--amethyst); }
+.anomaly-driver-down .anomaly-arrow { color: #c4b0fd; }

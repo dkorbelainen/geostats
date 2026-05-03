@@ -13,8 +13,9 @@ from sqlalchemy.orm import Session
 
 from geostats.api.deps import get_db, get_geo_client
 from geostats.client import GeoClient
-from geostats.models import Account, PlayerMatch, RatingSnapshot
+from geostats.models import Account, AccountAnomaly, PlayerMatch, RatingSnapshot
 from geostats.stats.aggregates import summarize_profile
+from geostats.stats.anomalies import CONFIDENCE_DISPLAY_THRESHOLD
 from geostats.stats.forecast import ForecastResult, forecast_rating
 from geostats.stats.series import get_series
 
@@ -117,6 +118,36 @@ def _time_ago(dt: object) -> str:
     if diff < _SECS_DAY:
         return f"{diff // _SECS_HOUR}h ago"
     return f"{diff // _SECS_DAY}d ago"
+
+
+_ANOMALY_LABELS: dict[str, str] = {
+    "peak_rating": "Peak rating",
+    "mean_rating": "Average rating",
+    "rating_volatility": "Rating volatility",
+    "rating_delta": "Rating growth",
+    "peak_win_streak": "Peak win streak",
+    "mean_guessed_first_rate": "Guess speed",
+    "winrate": "Win rate",
+    "mean_avg_guess_distance_km": "Average distance",
+    "log_games": "Games volume",
+}
+
+
+def _anomaly_view(row: AccountAnomaly | None) -> dict[str, object] | None:
+    if row is None or row.confidence_pct < CONFIDENCE_DISPLAY_THRESHOLD:
+        return None
+    drivers: list[dict[str, str]] = []
+    pairs = [(row.driver_1_feature, row.driver_1_z),
+             (row.driver_2_feature, row.driver_2_z)]
+    for feature, z in pairs:
+        if feature is None or z is None:
+            continue
+        drivers.append({
+            "feature": feature,
+            "label": _ANOMALY_LABELS.get(feature, feature),
+            "direction": "up" if z > 0 else "down",
+        })
+    return {"confidence_pct": row.confidence_pct, "drivers": drivers}
 
 
 async def resolve_profile(
@@ -317,6 +348,8 @@ async def profile_page(
         )
 
     pm = db.get(PlayerMatch, account.id)
+    anomaly_row = db.get(AccountAnomaly, account.id)
+    anomaly = _anomaly_view(anomaly_row)
     doppel: dict[str, Account | int | None] = {
         "global": db.get(Account, pm.global_match_id) if pm and pm.global_match_id else None,
         "global_sim": pm.global_similarity if pm else None,
@@ -343,6 +376,7 @@ async def profile_page(
             "fc_custom": fc_custom,
             "forecast_horizon": forecast,
             "doppel": doppel,
+            "anomaly": anomaly,
         },
     )
 

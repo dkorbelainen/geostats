@@ -220,6 +220,21 @@
     </div>
     {% endif %}
 
+    {% if anomaly %}
+    <p class="section-label">Profile rarity</p>
+    <div class="anomaly-card" title="How distinctive this profile is compared to other tracked players">
+      <div class="anomaly-pct">{{ anomaly.confidence_pct }}%</div>
+      <div class="anomaly-drivers">
+        {% for d in anomaly.drivers %}
+        <span class="anomaly-driver anomaly-driver-{{ d.direction }}">
+          <span class="anomaly-arrow">{% if d.direction == 'up' %}↑{% else %}↓{% endif %}</span>
+          {{ d.label }}
+        </span>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
     <p class="section-label">Forecast (Overall)</p>
     <div class="forecast-grid">
       {% for fc, label in [(fc_7d, "7 days"), (fc_30d, "30 days")] + ([(fc_custom, forecast_horizon ~ " days")] if fc_custom is not none else []) %}

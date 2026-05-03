@@ -51,6 +51,7 @@ services:
             if [ $((TICK % 28)) -eq 0 ]; then
               geostats poll-discover;
               geostats compute-matches;
+              geostats compute-anomalies;
             fi;
           else
             geostats poll-new --limit 100;
