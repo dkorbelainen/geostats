@@ -191,12 +191,18 @@ templates.env.filters["time_ago"] = _time_ago
 templates.env.globals["getattr"] = getattr
 
 
+_LB_VALID_LIMITS = frozenset({25, 100, 250, 500})
+
+
 @router.get("/leaderboard")
 async def leaderboard(
     request: Request,
     mode: Literal["overall", "moving", "nomove", "nmpz"] = Query(default="overall"),
+    limit: int = Query(default=100, ge=1),
     db: Session = Depends(get_db),  # noqa: B008
 ) -> Response:
+    if limit not in _LB_VALID_LIMITS:
+        limit = 100
     rating_col, pos_col = _LB_MODE_FIELDS[mode]
     latest_snap_sq = (
         db.query(func.max(RatingSnapshot.captured_at))
@@ -217,13 +223,13 @@ async def leaderboard(
             rating_col.isnot(None),
         )
         .order_by(rating_col.desc())
-        .limit(100)
+        .limit(limit)
         .all()
     )
     return templates.TemplateResponse(
         request,
         "leaderboard.html",
-        {"rows": rows, "mode": mode},
+        {"rows": rows, "mode": mode, "limit": limit},
     )
 
 
@@ -416,6 +422,10 @@ async def search_accounts(
             "slug": row.Account.slug,
             "country_code": row.Account.country_code,
             "rating": row.RatingSnapshot.rating if row.RatingSnapshot else None,
+            "position_overall": row.RatingSnapshot.position_overall if row.RatingSnapshot else None,
+            "position_moving": row.RatingSnapshot.position_moving if row.RatingSnapshot else None,
+            "position_nomove": row.RatingSnapshot.position_nomove if row.RatingSnapshot else None,
+            "position_nmpz": row.RatingSnapshot.position_nmpz if row.RatingSnapshot else None,
         }
         for row in rows
     ]
