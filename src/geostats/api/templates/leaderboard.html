@@ -49,11 +49,12 @@
 
       {% if rows %}
         {% for acc, snap in rows %}
-        {% set pos = getattr(snap, pos_attr) %}
+        {% set pos = loop.index %}
+        {% set real_pos = getattr(snap, pos_attr) %}
         <a class="lb-row{% if pos == 1 %} lb-r1{% elif pos == 2 %} lb-r2{% elif pos == 3 %} lb-r3{% endif %}"
            href="/profile/{{ (acc.slug or acc.id) | url_path }}">
           <div class="lb-pos{% if pos == 1 %} pg{% elif pos == 2 %} ps{% elif pos == 3 %} pb{% elif pos <= 10 %} pt{% endif %}">
-            {% if pos == 1 %}🥇{% elif pos == 2 %}🥈{% elif pos == 3 %}🥉{% else %}{{ pos }}{% endif %}
+            {% if pos == 1 %}🥇{% elif pos == 2 %}🥈{% elif pos == 3 %}🥉{% else %}{{ real_pos }}{% endif %}
           </div>
           <div class="lb-player">
             {% if acc.country_code %}
