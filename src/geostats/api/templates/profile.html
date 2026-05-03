@@ -192,7 +192,7 @@
       {% set d_acc = doppel[d_key] %}
       {% set d_sim = doppel[d_key ~ "_sim"] %}
       {% if d_acc %}
-      <a class="doppel-card" href="/profile/{{ d_acc.slug or d_acc.id }}">
+      <a class="doppel-card" href="/profile/{{ (d_acc.slug or d_acc.id) | url_path }}">
         <div class="doppel-label">{{ d_label }}</div>
         <div class="doppel-row">
           {% if d_acc.avatar_url %}
