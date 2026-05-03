@@ -60,7 +60,7 @@ body {
 .form-error { color: var(--red); font-size: 12px; margin-bottom: 10px; }
 
 /* ── Profile page wrapper ── */
-.page { max-width: 680px; margin: 0 auto; padding: 0 0 64px; }
+.page { max-width: 680px; margin: 0 auto; padding: 0 0 8px; }
 
 /* ── Top banner ── */
 .top-banner {
@@ -273,23 +273,21 @@ body {
 
 /* ── Site footer ── */
 .site-footer {
-  position: fixed; bottom: 14px; left: 0; right: 0;
-  display: flex; align-items: center; justify-content: center;
-  pointer-events: none; z-index: 50;
-}
-.footer-by {
-  position: absolute; left: 18px;
+  display: flex; align-items: center; justify-content: center; gap: 14px;
+  padding: 24px 18px 20px;
   font-size: 11px; color: var(--text-muted);
-  pointer-events: all;
 }
+.footer-by { font-size: 11px; color: var(--text-muted); }
 .footer-by a { color: var(--text-muted); text-decoration: none; }
 .footer-by a:hover { color: var(--text-secondary); }
-.footer-gh {
-  color: var(--text-muted); pointer-events: all;
-  transition: color .15s;
+.footer-link {
+  color: var(--text-muted); text-decoration: none;
+  transition: color .15s; display: flex; align-items: center;
 }
-.footer-gh:hover { color: var(--text-secondary); }
-.footer-gh svg { width: 17px; height: 17px; display: block; }
+.footer-link:hover { color: var(--text-secondary); }
+.footer-link svg { width: 17px; height: 17px; display: block; }
+.nick-link { color: inherit; text-decoration: none; }
+.nick-link:hover { text-decoration: underline; }
 
 /* ── Badge tiers ── */
 .badge-champion {
