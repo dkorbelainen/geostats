@@ -58,9 +58,9 @@ class UserInfo(BaseModel):
 class GameModeRatings(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    moving: int | None = Field(None, alias="Standardduels")
-    nomove: int | None = Field(None, alias="Nomoveduels")
-    nmpz: int | None = Field(None, alias="Nmpzduels")
+    moving: int | None = Field(None, alias="standardDuels")
+    nomove: int | None = Field(None, alias="noMoveDuels")
+    nmpz: int | None = Field(None, alias="nmpzDuels")
 
 
 class RankedProgress(BaseModel):
