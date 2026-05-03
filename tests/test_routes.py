@@ -424,3 +424,48 @@ def test_leaderboard_limit_in_response(client: TestClient) -> None:
     r = client.get("/leaderboard?limit=250")
     assert r.status_code == 200
     assert "Top 250" in r.text
+
+
+# ── /api/search ───────────────────────────────────────────────────────────────
+
+def test_search_returns_empty_for_short_query(client: TestClient) -> None:
+    r = client.get("/api/search?q=a")
+    assert r.status_code == 200
+    assert r.json() == []
+
+
+def test_search_finds_by_nick(client: TestClient, db: Session) -> None:
+    acc = Account(
+        id="searchtest1234567890",
+        nick="UniqueNick",
+        created_at=_now(),
+        last_polled_at=_now(),
+    )
+    db.add(acc)
+    db.flush()
+    db.add(RatingSnapshot(
+        account_id="searchtest1234567890",
+        captured_at=_now(),
+        rating=2500,
+        position_overall=42,
+        position_moving=38,
+        position_nomove=None,
+        position_nmpz=None,
+    ))
+    db.flush()
+    r = client.get("/api/search?q=Unique")
+    assert r.status_code == 200
+    data = r.json()
+    assert len(data) == 1
+    assert data[0]["nick"] == "UniqueNick"
+    assert data[0]["rating"] == 2500
+    assert data[0]["position_overall"] == 42
+    assert data[0]["position_moving"] == 38
+    assert data[0]["position_nomove"] is None
+    assert data[0]["position_nmpz"] is None
+
+
+def test_search_no_results(client: TestClient) -> None:
+    r = client.get("/api/search?q=zzznomatch")
+    assert r.status_code == 200
+    assert r.json() == []
