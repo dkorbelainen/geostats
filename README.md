@@ -6,7 +6,6 @@
 
 <p align="center">
   <a href="https://geostats.tech" target="_blank" rel="noopener"><img src="assets/badges/badge-site.svg" alt="geostats.tech" height="26"></a>&nbsp;
-  <img src="assets/badges/badge-version.svg" alt="v1.0.0" height="26">&nbsp;
   <img src="assets/badges/badge-tracker.svg" alt="tracker · live" height="26">&nbsp;
   <img src="assets/badges/badge-license.svg" alt="MIT license" height="26">
 </p>
