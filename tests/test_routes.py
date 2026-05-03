@@ -369,3 +369,58 @@ def test_profile_hides_anomaly_card_below_threshold(client, db) -> None:
     resp = client.get("/profile/quieta")
     assert resp.status_code == 200
     assert "Profile rarity" not in resp.text
+
+
+# ── /leaderboard ──────────────────────────────────────────────────────────────
+
+def _tracked_account(db: Session, id: str, nick: str, rating: int) -> None:
+    acc = Account(
+        id=id,
+        nick=nick,
+        created_at=_now(),
+        last_polled_at=_now(),
+        tracked=True,
+    )
+    db.add(acc)
+    db.flush()
+    db.add(RatingSnapshot(
+        account_id=id,
+        captured_at=_now(),
+        rating=rating,
+        position_overall=None,
+    ))
+    db.flush()
+
+
+def test_leaderboard_default_mode(client: TestClient) -> None:
+    r = client.get("/leaderboard")
+    assert r.status_code == 200
+    assert "Overall" in r.text
+
+
+def test_leaderboard_shows_tracked_players(client: TestClient, db: Session) -> None:
+    _tracked_account(db, "aaaaaaaaaa1234567890", "AlphaPlayer", 3000)
+    r = client.get("/leaderboard")
+    assert r.status_code == 200
+    assert "AlphaPlayer" in r.text
+
+
+def test_leaderboard_limit_25_restricts_rows(client: TestClient, db: Session) -> None:
+    for i in range(30):
+        uid = f"user{i:016d}"
+        _tracked_account(db, uid, f"Player{i}", 3000 - i)
+    r = client.get("/leaderboard?limit=25")
+    assert r.status_code == 200
+    assert r.text.count("lb-row") <= 25
+
+
+def test_leaderboard_invalid_limit_defaults_to_100(client: TestClient) -> None:
+    r = client.get("/leaderboard?limit=999")
+    assert r.status_code == 200
+    assert "Top 100" in r.text
+
+
+def test_leaderboard_limit_in_response(client: TestClient) -> None:
+    r = client.get("/leaderboard?limit=250")
+    assert r.status_code == 200
+    assert "Top 250" in r.text
