@@ -73,6 +73,17 @@ def compute_matches_cmd() -> None:
     click.echo(f"computed matches for {n} players")
 
 
+@cli.command("compute-anomalies")
+def compute_anomalies_cmd() -> None:
+    """Recompute account anomaly scores for all eligible tracked accounts."""
+    from geostats.db import session_factory as _sf, session_scope  # noqa: PLC0415
+    from geostats.stats.anomalies import compute_anomalies  # noqa: PLC0415
+    _sf()
+    with session_scope() as db:
+        n = compute_anomalies(db)
+    click.echo(f"computed anomalies for {n} players")
+
+
 @cli.command("poll-new")
 @click.option(
     "--limit",

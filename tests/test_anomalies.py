@@ -197,3 +197,32 @@ def test_compute_anomalies_replaces_previous_results(db: Session) -> None:
     n2 = compute_anomalies(db)
     assert n2 == MIN_POPULATION + 1
     assert db.query(AccountAnomaly).count() == n2
+
+
+from click.testing import CliRunner
+
+from geostats.cli import cli
+
+
+def test_compute_anomalies_cli_smoke(monkeypatch, db: Session) -> None:
+    from contextlib import contextmanager
+
+    @contextmanager
+    def fake_scope():
+        yield db
+
+    monkeypatch.setattr("geostats.db.session_factory", lambda: None)
+    monkeypatch.setattr("geostats.db.session_scope", fake_scope)
+
+    for i in range(MIN_POPULATION + 1):
+        _seed_typical(
+            db, f"u{i:03d}", rating=1500 + i, streak=3, gfr=0.4,
+            played=200 + i, won=110, dist_km=300.0,
+        )
+    db.commit()
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["compute-anomalies"])
+    assert result.exit_code == 0, result.output
+    assert "anomalies" in result.output.lower()
+    assert db.query(AccountAnomaly).count() == MIN_POPULATION + 1
