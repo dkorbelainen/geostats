@@ -92,9 +92,9 @@
       </div>
       {% if latest %}
       <div class="hero-rank">
-        #<b>{{ latest.position_overall or '—' }}</b> worldwide
+        {% if latest.position_overall is not none %}<span class="rank-pos">#<b>{{ latest.position_overall }}</b></span> worldwide{% endif %}
         {% if summary.percentile["overall"] is not none %}&nbsp;·&nbsp;top <b>{{ summary.percentile["overall"] }}%</b>{% endif %}
-        {% if acc.country_code %}&nbsp;·&nbsp;#<b>{{ latest.position_country or '—' }}</b> in {{ acc.country_code }}{% endif %}
+        {% if acc.country_code and latest.position_country is not none %}&nbsp;·&nbsp;<span class="rank-pos">#<b>{{ latest.position_country }}</b></span> in {{ acc.country_code }}{% endif %}
       </div>
       {% endif %}
     </div>
@@ -137,7 +137,7 @@
           {{ d7 | fmt_delta }} (7d)
         </div>
         <div class="mode-rank">
-          {% if latest %}{{ getattr(latest, 'position_' ~ mode_key) | fmt_rank }} worldwide{% endif %}
+          {% if latest and summary.current[mode_key] is not none %}{% set _pos = getattr(latest, 'position_' ~ mode_key) %}{% if _pos is not none %}<span class="rank-pos">{{ _pos | fmt_rank }}</span> worldwide{% endif %}{% endif %}
         </div>
         <svg class="mode-spark" viewBox="0 0 80 20" preserveAspectRatio="none"></svg>
       </div>
@@ -186,7 +186,7 @@
       {% for mode_key, mode_label in [("overall","Overall"),("moving","Moving"),("nomove","No Move"),("nmpz","NMPZ")] %}
       {% set rec = summary.record[mode_key] %}
       <div class="hl-row">
-        <span class="hl-name">{{ mode_label }}</span>
+        <span class="hl-name">{{ mode_label }}{% if latest %}{% set _pos = getattr(latest, 'position_' ~ mode_key) %}{% if _pos is not none %}&nbsp;<span class="hl-rank">{{ _pos | fmt_rank }}</span>{% endif %}{% endif %}</span>
         <span class="hl-val">{{ rec.value | fmt_rating if rec else "—" }}</span>
         <span class="hl-date">{{ rec.captured_at.date().isoformat() if rec else "" }}</span>
       </div>

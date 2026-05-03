@@ -9,6 +9,7 @@
   --green:          #7ecba0;
   --red:            #e08888;
   --amethyst:       #a78bfa;
+  --amethyst-light: #c4b0ff;
   --amethyst-dim:   #6d5bbf;
   --gold:           #c8b87e;
 }
@@ -166,6 +167,7 @@ body {
 .mode-rating { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
 .mode-delta { font-size: 11px; }
 .mode-rank { font-size: 10px; color: var(--text-muted); margin-top: 4px; }
+.rank-pos { color: var(--amethyst-light); }
 .mode-spark { width: 100%; height: 20px; display: block; margin-top: 8px; }
 
 /* ── Stats grid ── */
@@ -196,6 +198,7 @@ body {
 }
 .hl-row:last-child { border-bottom: none; }
 .hl-name { color: var(--text-secondary); font-size: 12px; min-width: 5.5rem; }
+.hl-rank { color: var(--amethyst-light); font-size: 10px; margin-left: 4px; }
 .hl-val { font-weight: 600; font-size: 13px; }
 .hl-date { color: var(--text-muted); font-size: 11px; }
 
