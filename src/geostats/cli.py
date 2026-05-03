@@ -73,6 +73,17 @@ def compute_matches_cmd() -> None:
     click.echo(f"computed matches for {n} players")
 
 
+@cli.command("rerank")
+def rerank() -> None:
+    """Recompute position rankings for all tracked accounts."""
+    session_factory()
+    from geostats.db import session_scope  # noqa: PLC0415
+    from geostats.ranker import compute_ranks  # noqa: PLC0415
+    with session_scope() as db:
+        compute_ranks(db)
+    click.echo("ranks recomputed")
+
+
 @cli.command("poll-new")
 @click.option(
     "--limit",

@@ -1,9 +1,13 @@
+import logging
+
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+log = logging.getLogger(__name__)
+
 
 def compute_ranks(db: Session) -> None:
-    db.execute(text("""
+    result = db.execute(text("""
         WITH latest AS (
             SELECT DISTINCT ON (rs.account_id)
                 rs.account_id,
@@ -43,4 +47,5 @@ def compute_ranks(db: Session) -> None:
         WHERE rs.account_id = r.account_id
           AND rs.captured_at = r.captured_at
     """))
+    log.info("compute_ranks updated %d snapshot rows", result.rowcount)
     # caller is responsible for commit (session_scope in prod, test fixture rollback in tests)
