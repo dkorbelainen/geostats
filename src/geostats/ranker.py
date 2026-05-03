@@ -25,6 +25,10 @@ def compute_ranks(db: Session) -> None:
             SELECT
                 l.account_id,
                 l.captured_at,
+                l.rating,
+                l.rating_moving,
+                l.rating_nomove,
+                l.rating_nmpz,
                 RANK() OVER (ORDER BY l.rating        DESC NULLS LAST) AS pos_overall,
                 RANK() OVER (ORDER BY l.rating_moving DESC NULLS LAST) AS pos_moving,
                 RANK() OVER (ORDER BY l.rating_nomove DESC NULLS LAST) AS pos_nomove,
@@ -38,11 +42,11 @@ def compute_ranks(db: Session) -> None:
         )
         UPDATE rating_snapshots rs
         SET
-            position_overall = r.pos_overall,
-            position_moving  = r.pos_moving,
-            position_nomove  = r.pos_nomove,
-            position_nmpz    = r.pos_nmpz,
-            position_country = r.pos_country
+            position_overall = CASE WHEN r.rating         IS NOT NULL THEN r.pos_overall ELSE NULL END,
+            position_moving  = CASE WHEN r.rating_moving  IS NOT NULL THEN r.pos_moving  ELSE NULL END,
+            position_nomove  = CASE WHEN r.rating_nomove  IS NOT NULL THEN r.pos_nomove  ELSE NULL END,
+            position_nmpz    = CASE WHEN r.rating_nmpz    IS NOT NULL THEN r.pos_nmpz    ELSE NULL END,
+            position_country = CASE WHEN r.rating         IS NOT NULL THEN r.pos_country ELSE NULL END
         FROM ranked r
         WHERE rs.account_id = r.account_id
           AND rs.captured_at = r.captured_at
