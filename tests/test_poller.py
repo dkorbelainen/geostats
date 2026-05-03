@@ -38,9 +38,9 @@ async def test_poll_account_builds_snapshot():
         "winStreak": 3,
         "guessedFirstRate": 0.65,
         "gameModeRatings": {
-            "Standardduels": 1550,
-            "Nomoveduels": 1400,
-            "Nmpzduels": 1200,
+            "standardDuels": 1550,
+            "noMoveDuels": 1400,
+            "nmpzDuels": 1200,
         },
     })
     stats = UserStats.model_validate({

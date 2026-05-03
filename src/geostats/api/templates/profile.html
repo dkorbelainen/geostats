@@ -2,6 +2,14 @@
 {% block title %}
   {% if collecting %}{{ account.nick }}{% else %}{{ summary.account.nick }}{% endif %} — GeoStats
 {% endblock %}
+{% block og %}
+{% set acc = summary.account if not collecting else account %}
+<meta property="og:title" content="{{ acc.nick }} — GeoStats">
+<meta property="og:description" content="Rating: {{ summary.current['overall'] | fmt_rating if not collecting else '…' }} · GeoGuessr rank tracker">
+<meta property="og:image" content="https://geostats.tech/static/social-card.png">
+<meta property="og:url" content="https://geostats.tech{{ request.url.path }}">
+<meta name="twitter:card" content="summary_large_image">
+{% endblock %}
 {% block body %}
 {% if collecting %}<meta http-equiv="refresh" content="60">{% endif %}
 {% set acc = summary.account if not collecting else account %}
