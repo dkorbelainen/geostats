@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
+import numpy as np
 from sqlalchemy.orm import Session
 
-from geostats.models import Account, AccountAnomaly
+from geostats.models import Account, AccountAnomaly, RatingSnapshot
+from geostats.stats.anomalies import FEATURES, _load_features
 
 
 def test_account_anomaly_persists(db: Session) -> None:
@@ -29,3 +31,92 @@ def test_account_anomaly_persists(db: Session) -> None:
     assert row.confidence_pct == 82
     assert row.driver_1_feature == "peak_win_streak"
     assert row.driver_2_z == -2.4
+
+
+def _seed_snapshot(
+    db: Session,
+    account_id: str,
+    captured_at: datetime,
+    *,
+    rating: int | None,
+    win_streak: int | None = None,
+    guessed_first_rate: float | None = None,
+    games_played: int | None = None,
+    games_won: int | None = None,
+    avg_guess_distance_km: float | None = None,
+) -> None:
+    db.add(
+        RatingSnapshot(
+            account_id=account_id,
+            captured_at=captured_at,
+            rating=rating,
+            division_number=None,
+            division_name=None,
+            rating_moving=None,
+            rating_nomove=None,
+            rating_nmpz=None,
+            win_streak=win_streak,
+            guessed_first_rate=guessed_first_rate,
+            games_played=games_played,
+            games_won=games_won,
+            avg_guess_distance_km=avg_guess_distance_km,
+            position_overall=None,
+            position_moving=None,
+            position_nomove=None,
+            position_nmpz=None,
+            position_country=None,
+        )
+    )
+
+
+def test_load_features_filters_low_volume(db: Session) -> None:
+    now = datetime.now(UTC)
+    db.add(Account(id="hi", nick="hi", created_at=now))
+    db.add(Account(id="lo", nick="lo", created_at=now))
+    db.flush()
+
+    _seed_snapshot(
+        db, "hi", now, rating=2000, win_streak=4,
+        guessed_first_rate=0.4, games_played=120, games_won=70,
+        avg_guess_distance_km=180.0,
+    )
+    _seed_snapshot(
+        db, "lo", now, rating=1500, win_streak=2,
+        guessed_first_rate=0.3, games_played=10, games_won=5,
+        avg_guess_distance_km=600.0,
+    )
+    db.commit()
+
+    rows = _load_features(db)
+    assert [r.account_id for r in rows] == ["hi"]
+    assert rows[0].vector.shape == (len(FEATURES),)
+
+
+def test_load_features_aggregates_history(db: Session) -> None:
+    now = datetime.now(UTC)
+    db.add(Account(id="x", nick="x", created_at=now))
+    db.flush()
+
+    _seed_snapshot(
+        db, "x", now - timedelta(days=10), rating=1800, win_streak=3,
+        guessed_first_rate=0.5, games_played=100, games_won=55,
+        avg_guess_distance_km=200.0,
+    )
+    _seed_snapshot(
+        db, "x", now, rating=2000, win_streak=7,
+        guessed_first_rate=0.6, games_played=200, games_won=120,
+        avg_guess_distance_km=150.0,
+    )
+    db.commit()
+
+    rows = _load_features(db)
+    assert len(rows) == 1
+    feats = dict(zip(FEATURES, rows[0].vector, strict=True))
+    assert feats["peak_rating"] == 2000.0
+    assert feats["mean_rating"] == 1900.0
+    assert feats["rating_delta"] == 200.0
+    assert feats["peak_win_streak"] == 7.0
+    assert feats["winrate"] == 120 / 200
+    assert feats["log_games"] == np.log1p(200)
+    # rating_volatility uses sample stddev across [1800, 2000] => 141.42...
+    assert abs(feats["rating_volatility"] - np.std([1800.0, 2000.0], ddof=1)) < 1e-6
