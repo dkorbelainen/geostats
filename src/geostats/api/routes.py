@@ -174,6 +174,13 @@ async def resolve_profile(
     return first.user_id, first.nick
 
 
+_LB_MODE_FIELDS = {
+    "overall": (RatingSnapshot.rating,        RatingSnapshot.position_overall),
+    "moving":  (RatingSnapshot.rating_moving, RatingSnapshot.position_moving),
+    "nomove":  (RatingSnapshot.rating_nomove, RatingSnapshot.position_nomove),
+    "nmpz":    (RatingSnapshot.rating_nmpz,   RatingSnapshot.position_nmpz),
+}
+
 templates.env.filters["url_path"] = lambda v: _url_quote(str(v), safe="")
 templates.env.filters["fmt_rating"] = _fmt_rating
 templates.env.filters["fmt_delta"] = _fmt_delta
@@ -182,6 +189,42 @@ templates.env.filters["country_flag"] = _country_flag
 templates.env.filters["flag_img"] = _flag_img
 templates.env.filters["time_ago"] = _time_ago
 templates.env.globals["getattr"] = getattr
+
+
+@router.get("/leaderboard")
+async def leaderboard(
+    request: Request,
+    mode: Literal["overall", "moving", "nomove", "nmpz"] = Query(default="overall"),
+    db: Session = Depends(get_db),  # noqa: B008
+) -> Response:
+    _, pos_col = _LB_MODE_FIELDS[mode]
+    latest_snap_sq = (
+        db.query(func.max(RatingSnapshot.captured_at))
+        .filter(RatingSnapshot.account_id == Account.id)
+        .correlate(Account)
+        .scalar_subquery()
+    )
+    rows = (
+        db.query(Account, RatingSnapshot)
+        .join(
+            RatingSnapshot,
+            (RatingSnapshot.account_id == Account.id)
+            & (RatingSnapshot.captured_at == latest_snap_sq),
+        )
+        .filter(
+            Account.tracked == True,  # noqa: E712
+            Account.last_polled_at.isnot(None),
+            pos_col.isnot(None),
+        )
+        .order_by(pos_col.asc())
+        .limit(100)
+        .all()
+    )
+    return templates.TemplateResponse(
+        request,
+        "leaderboard.html",
+        {"rows": rows, "mode": mode},
+    )
 
 
 @router.get("/healthz")

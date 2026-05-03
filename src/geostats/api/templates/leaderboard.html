@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Leaderboard — GeoStats{% endblock %}
+{% block body %}
+{% set rating_attr = {'overall': 'rating', 'moving': 'rating_moving', 'nomove': 'rating_nomove', 'nmpz': 'rating_nmpz'}[mode] %}
+{% set pos_attr = {'overall': 'position_overall', 'moving': 'position_moving', 'nomove': 'position_nomove', 'nmpz': 'position_nmpz'}[mode] %}
+<div class="lb-page">
+
+  <div class="top-banner">
+    <div class="top-inner">
+      <nav class="nav">
+        <a class="nav-logo" href="/">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="22" height="22" aria-hidden="true">
+            <defs>
+              <linearGradient id="nav-g" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#a78bfa"/>
+                <stop offset="100%" stop-color="#5b3fd6"/>
+              </linearGradient>
+            </defs>
+            <rect width="64" height="64" rx="14" fill="#15102e"/>
+            <path d="M40 22a12 12 0 1 0 0 20h0v-9h-7" fill="none" stroke="url(#nav-g)" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <rect x="38" y="38" width="2.4" height="4" rx="1" fill="#e9e0ff"/>
+            <rect x="42" y="35" width="2.4" height="7" rx="1" fill="#e9e0ff"/>
+            <rect x="46" y="32" width="2.4" height="10" rx="1" fill="#e9e0ff"/>
+          </svg>
+          GeoStats
+        </a>
+        <span class="nav-sub">leaderboard</span>
+      </nav>
+    </div>
+  </div>
+
+  <div class="lb-content">
+    <p class="lb-page-title">Leaderboard</p>
+    <p class="lb-page-sub">Top {{ rows | length }} players tracked by GeoStats</p>
+
+    <div class="lb-tabs">
+      <a class="lb-tab{% if mode == 'overall' %} active{% endif %}" href="/leaderboard?mode=overall">Overall</a>
+      <a class="lb-tab{% if mode == 'moving' %} active{% endif %}" href="/leaderboard?mode=moving">Moving</a>
+      <a class="lb-tab{% if mode == 'nomove' %} active{% endif %}" href="/leaderboard?mode=nomove">No Move</a>
+      <a class="lb-tab{% if mode == 'nmpz' %} active{% endif %}" href="/leaderboard?mode=nmpz">NMPZ</a>
+    </div>
+
+    <div class="lb-table">
+      <div class="lb-head">
+        <span>#</span>
+        <span>Player</span>
+        <span class="lbh-r">Rating</span>
+      </div>
+
+      {% if rows %}
+        {% for acc, snap in rows %}
+        {% set pos = getattr(snap, pos_attr) %}
+        <a class="lb-row{% if pos == 1 %} lb-r1{% elif pos == 2 %} lb-r2{% elif pos == 3 %} lb-r3{% endif %}"
+           href="/profile/{{ (acc.slug or acc.id) | url_path }}">
+          <div class="lb-pos{% if pos == 1 %} pg{% elif pos == 2 %} ps{% elif pos == 3 %} pb{% elif pos <= 10 %} pt{% endif %}">
+            {% if pos == 1 %}🥇{% elif pos == 2 %}🥈{% elif pos == 3 %}🥉{% else %}{{ pos }}{% endif %}
+          </div>
+          <div class="lb-player">
+            {% if acc.country_code %}
+            <span class="lb-flag">{{ acc.country_code | country_flag }}</span>
+            {% endif %}
+            <div class="lb-nick-wrap">
+              <div class="lb-nick">{{ acc.nick }}</div>
+              {% if acc.country_code %}<div class="lb-cc">{{ acc.country_code }}</div>{% endif %}
+            </div>
+          </div>
+          <div class="lb-rating">{{ getattr(snap, rating_attr) | fmt_rating }}</div>
+        </a>
+        {% endfor %}
+      {% else %}
+        <div class="lb-empty">No data yet — players appear after first poll.</div>
+      {% endif %}
+    </div>
+
+    <p class="lb-note">Rankings within tracked players only · updates every ~12 h</p>
+  </div>
+
+</div>
+{% endblock %}
