@@ -2,6 +2,7 @@ import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
+from urllib.parse import quote as _url_quote
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse, Response
@@ -142,6 +143,7 @@ async def resolve_profile(
     return first.user_id, first.nick
 
 
+templates.env.filters["url_path"] = lambda v: _url_quote(str(v), safe="")
 templates.env.filters["fmt_rating"] = _fmt_rating
 templates.env.filters["fmt_delta"] = _fmt_delta
 templates.env.filters["fmt_rank"] = _fmt_rank
@@ -213,7 +215,7 @@ async def lookup(
     account.lookup_count += 1
     db.commit()
 
-    return RedirectResponse(url=f"/profile/{account.slug or user_id}", status_code=303)
+    return RedirectResponse(url=f"/profile/{_url_quote(str(account.slug or user_id), safe='')}", status_code=303)
 
 
 @router.get("/profile/{profile_ref}")
