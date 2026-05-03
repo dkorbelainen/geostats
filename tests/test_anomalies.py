@@ -120,3 +120,80 @@ def test_load_features_aggregates_history(db: Session) -> None:
     assert feats["log_games"] == np.log1p(200)
     # rating_volatility uses sample stddev across [1800, 2000] => 141.42...
     assert abs(feats["rating_volatility"] - np.std([1800.0, 2000.0], ddof=1)) < 1e-6
+
+
+from geostats.models import AccountAnomaly
+from geostats.stats.anomalies import (
+    CONFIDENCE_DISPLAY_THRESHOLD,
+    MIN_POPULATION,
+    compute_anomalies,
+)
+
+
+def _seed_typical(db: Session, account_id: str, *, rating: int, streak: int,
+                  gfr: float, played: int, won: int, dist_km: float) -> None:
+    now = datetime.now(UTC)
+    db.add(Account(id=account_id, nick=account_id, created_at=now))
+    db.flush()
+    _seed_snapshot(
+        db, account_id, now, rating=rating, win_streak=streak,
+        guessed_first_rate=gfr, games_played=played, games_won=won,
+        avg_guess_distance_km=dist_km,
+    )
+
+
+def test_compute_anomalies_skips_when_population_too_small(db: Session) -> None:
+    for i in range(5):
+        _seed_typical(
+            db, f"u{i}", rating=1500 + i, streak=3, gfr=0.4,
+            played=200, won=110, dist_km=300.0,
+        )
+    db.commit()
+
+    n = compute_anomalies(db)
+    assert n == 0
+    assert db.query(AccountAnomaly).count() == 0
+
+
+def test_compute_anomalies_writes_rows_and_finds_outlier(db: Session) -> None:
+    for i in range(MIN_POPULATION):
+        _seed_typical(
+            db, f"u{i:03d}", rating=1500 + (i % 5) * 10, streak=3 + i % 2,
+            gfr=0.40 + (i % 3) * 0.005, played=200 + i, won=110 + (i % 3),
+            dist_km=300.0 + (i % 4),
+        )
+    _seed_typical(
+        db, "outlier", rating=2700, streak=20, gfr=0.92,
+        played=400, won=380, dist_km=40.0,
+    )
+    db.commit()
+
+    n = compute_anomalies(db)
+    assert n == MIN_POPULATION + 1
+
+    rows = {r.account_id: r for r in db.query(AccountAnomaly).all()}
+    assert len(rows) == n
+
+    outlier = rows["outlier"]
+    assert 0 <= outlier.confidence_pct <= 100
+    assert outlier.confidence_pct >= CONFIDENCE_DISPLAY_THRESHOLD
+    assert outlier.driver_1_feature in FEATURES
+    typical_pcts = [rows[f"u{i:03d}"].confidence_pct for i in range(MIN_POPULATION)]
+    assert outlier.confidence_pct > max(typical_pcts)
+
+
+def test_compute_anomalies_replaces_previous_results(db: Session) -> None:
+    for i in range(MIN_POPULATION + 1):
+        _seed_typical(
+            db, f"u{i:03d}", rating=1500 + i, streak=3, gfr=0.4,
+            played=200 + i, won=110, dist_km=300.0,
+        )
+    db.commit()
+
+    compute_anomalies(db)
+    first_ts = db.query(AccountAnomaly.computed_at).first()
+    assert first_ts is not None
+
+    n2 = compute_anomalies(db)
+    assert n2 == MIN_POPULATION + 1
+    assert db.query(AccountAnomaly).count() == n2

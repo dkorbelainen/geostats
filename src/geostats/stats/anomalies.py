@@ -3,10 +3,15 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 import numpy as np
+from sklearn.ensemble import IsolationForest
+from sklearn.preprocessing import StandardScaler
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+
+from geostats.models import AccountAnomaly
 
 log = logging.getLogger(__name__)
 
@@ -122,3 +127,87 @@ def _load_features(db: Session) -> list[_Row]:
         )
         rows.append(_Row(account_id=r.account_id, vector=vec))
     return rows
+
+
+CONFIDENCE_DISPLAY_THRESHOLD = 70  # consumed by the route layer
+_RNG_SEED = 42
+_N_ESTIMATORS = 200
+
+
+def _percentile_rank(scores: np.ndarray) -> np.ndarray:
+    """Map IsolationForest.score_samples output to anomaly percentile [0, 100].
+
+    score_samples returns higher = more normal, so the lowest score is the most
+    anomalous. We assign the most anomalous account 100% confidence and the most
+    normal 0%.
+    """
+    n = scores.shape[0]
+    if n == 0:
+        return scores
+    if n == 1:
+        return np.array([0.0])
+    order = np.argsort(scores)  # ascending: most anomalous first
+    ranks = np.empty(n, dtype=np.float64)
+    ranks[order] = np.arange(n, dtype=np.float64)
+    # rank 0 (lowest score) → 100% anomalous, rank n-1 → 0%.
+    return 100.0 * (n - 1 - ranks) / (n - 1)
+
+
+def _top_drivers(
+    z_row: np.ndarray, k: int = 2
+) -> list[tuple[str, float]]:
+    order = np.argsort(-np.abs(z_row))[:k]
+    return [(FEATURES[int(i)], float(z_row[int(i)])) for i in order]
+
+
+def compute_anomalies(db: Session) -> int:
+    rows = _load_features(db)
+    if len(rows) < MIN_POPULATION:
+        log.warning(
+            "anomalies: population too small (%d < %d), skipping",
+            len(rows), MIN_POPULATION,
+        )
+        return 0
+
+    matrix = np.vstack([r.vector for r in rows])
+    scaler = StandardScaler()
+    scaled = scaler.fit_transform(matrix)
+
+    clf = IsolationForest(
+        n_estimators=_N_ESTIMATORS,
+        contamination="auto",
+        random_state=_RNG_SEED,
+    )
+    clf.fit(scaled)
+    raw_scores = clf.score_samples(scaled)
+    confidence = _percentile_rank(raw_scores)
+
+    now = datetime.now(UTC)
+    db.execute(text("DELETE FROM account_anomalies"))
+    db.flush()
+
+    batch: list[AccountAnomaly] = []
+    for i, row in enumerate(rows):
+        drivers = _top_drivers(scaled[i])
+        d1, d2 = drivers[0], drivers[1] if len(drivers) > 1 else (None, None)
+        batch.append(
+            AccountAnomaly(
+                account_id=row.account_id,
+                score=float(raw_scores[i]),
+                confidence_pct=int(round(float(np.clip(confidence[i], 0.0, 100.0)))),
+                driver_1_feature=d1[0],
+                driver_1_z=d1[1],
+                driver_2_feature=d2[0] if d2[0] is not None else None,
+                driver_2_z=d2[1] if d2[0] is not None else None,
+                computed_at=now,
+            )
+        )
+        if len(batch) >= 500:
+            db.bulk_save_objects(batch)
+            db.flush()
+            batch.clear()
+    if batch:
+        db.bulk_save_objects(batch)
+    db.commit()
+    log.info("anomalies: wrote %d rows", len(rows))
+    return len(rows)
