@@ -214,10 +214,9 @@ async def leaderboard(
         .filter(
             Account.tracked == True,  # noqa: E712
             Account.last_polled_at.isnot(None),
-            pos_col.isnot(None),
             rating_col.isnot(None),
         )
-        .order_by(pos_col.asc())
+        .order_by(rating_col.desc())
         .limit(100)
         .all()
     )

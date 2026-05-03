@@ -20,17 +20,19 @@ def _make_client(ncfa_cookie: str) -> GeoClient:
 log = logging.getLogger(__name__)
 
 
-async def discover_leaderboard(client: GeoClient, limit: int = 100) -> list[str]:
+async def discover_leaderboard(client: GeoClient, limit: int = 100, max_total: int = 200) -> list[str]:
     all_ids: list[str] = []
     offset = 0
     while True:
-        page = await client.get_leaderboard_page(offset=offset, limit=limit)
+        remaining = max_total - len(all_ids)
+        page_size = min(limit, remaining)
+        page = await client.get_leaderboard_page(offset=offset, limit=page_size)
         if not page:
             break
         all_ids.extend(page)
-        if len(page) < limit:
+        if len(all_ids) >= max_total or len(page) < page_size:
             break
-        offset += limit
+        offset += page_size
     return all_ids
 
 
