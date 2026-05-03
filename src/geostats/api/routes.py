@@ -205,8 +205,9 @@ async def lookup(
         now = datetime.now(tz=UTC)
         account = Account(id=user_id, nick=nick or user_id, tracked=True, created_at=now)
         db.add(account)
-    elif nick is not None:
+    elif nick is not None and account.nick != nick:
         account.nick = nick
+        account.slug = None
     if account.slug is None:
         _assign_slug(db, account)
     account.lookup_count += 1

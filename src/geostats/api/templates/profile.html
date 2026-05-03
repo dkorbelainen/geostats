@@ -23,7 +23,7 @@
         <div class="avatar-pin avatar-placeholder">{{ acc.country_code | flag_img if acc.country_code else '🌎' }}</div>
         {% endif %}
         <div class="header-info">
-          <h1>{{ acc.nick }}{% if acc.id == '61b24b1554e5b6000108c190' %} 🔥{% endif %}</h1>
+          <h1><a class="nick-link" href="https://www.geoguessr.com/user/{{ acc.id }}" target="_blank" rel="noopener">{{ acc.nick }}</a>{% if acc.id == '61b24b1554e5b6000108c190' %} 🔥{% endif %}</h1>
           <div class="header-meta">
             {% if acc.country_code %}
             <span class="meta-txt">{{ acc.country_code | country_flag }} {{ acc.country_code }}</span>
@@ -69,9 +69,9 @@
       </div>
       {% if latest %}
       <div class="hero-rank">
-        {% if latest.position_overall %}#<b>{{ latest.position_overall }}</b> worldwide{% endif %}
+        #<b>{{ latest.position_overall or '—' }}</b> worldwide
         {% if summary.percentile["overall"] is not none %}&nbsp;·&nbsp;top <b>{{ summary.percentile["overall"] }}%</b>{% endif %}
-        {% if latest.position_country %}&nbsp;·&nbsp;#<b>{{ latest.position_country }}</b> in {{ acc.country_code }}{% endif %}
+        {% if acc.country_code %}&nbsp;·&nbsp;#<b>{{ latest.position_country or '—' }}</b> in {{ acc.country_code }}{% endif %}
       </div>
       {% endif %}
     </div>
