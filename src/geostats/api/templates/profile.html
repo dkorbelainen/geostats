@@ -10,7 +10,22 @@
   <div class="top-banner">
     <div class="top-inner">
       <nav class="nav">
-        <a class="nav-logo" href="/">GeoStats</a>
+        <a class="nav-logo" href="/">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="22" height="22" aria-hidden="true">
+            <defs>
+              <linearGradient id="nav-g" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#a78bfa"/>
+                <stop offset="100%" stop-color="#5b3fd6"/>
+              </linearGradient>
+            </defs>
+            <rect width="64" height="64" rx="14" fill="#15102e"/>
+            <path d="M40 22a12 12 0 1 0 0 20h0v-9h-7" fill="none" stroke="url(#nav-g)" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <rect x="38" y="38" width="2.4" height="4" rx="1" fill="#e9e0ff"/>
+            <rect x="42" y="35" width="2.4" height="7" rx="1" fill="#e9e0ff"/>
+            <rect x="46" y="32" width="2.4" height="10" rx="1" fill="#e9e0ff"/>
+          </svg>
+          GeoStats
+        </a>
         <div style="display:flex;align-items:center;gap:12px">
           <span class="nav-sub">geoguessr tracker</span>
           <button class="share-btn" onclick="shareProfile()">share</button>
