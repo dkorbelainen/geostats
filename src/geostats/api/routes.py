@@ -166,7 +166,7 @@ async def leaderboard(
     mode: Literal["overall", "moving", "nomove", "nmpz"] = Query(default="overall"),
     db: Session = Depends(get_db),  # noqa: B008
 ) -> Response:
-    _, pos_col = _LB_MODE_FIELDS[mode]
+    rating_col, pos_col = _LB_MODE_FIELDS[mode]
     latest_snap_sq = (
         db.query(func.max(RatingSnapshot.captured_at))
         .filter(RatingSnapshot.account_id == Account.id)
@@ -184,6 +184,7 @@ async def leaderboard(
             Account.tracked == True,  # noqa: E712
             Account.last_polled_at.isnot(None),
             pos_col.isnot(None),
+            rating_col.isnot(None),
         )
         .order_by(pos_col.asc())
         .limit(100)
