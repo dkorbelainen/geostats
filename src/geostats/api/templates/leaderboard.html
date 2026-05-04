@@ -31,7 +31,7 @@
 
   <div class="lb-content">
     <p class="lb-page-title">Leaderboard</p>
-    <p class="lb-page-sub">Top {{ limit }} players tracked by GeoStats</p>
+    <p class="lb-page-sub" id="lb-page-sub">Top {{ limit }} players tracked by GeoStats</p>
 
     <div class="lb-controls">
       <div class="lb-limit-pills">
@@ -42,8 +42,7 @@
       </div>
       <div class="lb-search-wrap">
         <input class="lb-search" type="text" id="lb-search-input"
-               placeholder="Search nick…" autocomplete="off" spellcheck="false">
-        <div class="lb-search-dropdown" id="lb-search-dropdown" hidden></div>
+               placeholder="Search player…" autocomplete="off" spellcheck="false">
       </div>
     </div>
 
@@ -61,6 +60,7 @@
         <span class="lbh-r">Rating</span>
       </div>
 
+      <div id="lb-rows">
       {% if rows %}
         {% for acc, snap in rows %}
         {% set pos = loop.index %}
@@ -84,6 +84,7 @@
       {% else %}
         <div class="lb-empty">No data yet — players appear after first poll.</div>
       {% endif %}
+      </div>
     </div>
 
     <p class="lb-note">Rankings within tracked players only · updates every ~12 h</p>
@@ -93,9 +94,13 @@
 <script>
 (function () {
   var input = document.getElementById('lb-search-input');
-  var dropdown = document.getElementById('lb-search-dropdown');
+  var rows = document.getElementById('lb-rows');
+  var sub = document.getElementById('lb-page-sub');
   var mode = {{ mode | tojson }};
   var posKey = {overall:'position_overall',moving:'position_moving',nomove:'position_nomove',nmpz:'position_nmpz'}[mode] || 'position_overall';
+  var ratingKey = {overall:'rating',moving:'rating_moving',nomove:'rating_nomove',nmpz:'rating_nmpz'}[mode] || 'rating';
+  var originalRows = rows.innerHTML;
+  var originalSub = sub.textContent;
   var timer;
 
   function flag(code) {
@@ -104,38 +109,53 @@
     return Array.from(code.toUpperCase()).map(function(c){return String.fromCodePoint(0x1F1E6-65+c.charCodeAt(0));}).join('');
   }
 
-  function hide() { dropdown.hidden = true; dropdown.innerHTML = ''; }
+  function fmtRating(v) {
+    return v != null ? String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') : '—';
+  }
 
-  function show(results) {
-    if (!results.length) { hide(); return; }
-    dropdown.innerHTML = results.map(function(r) {
-      var f = r.country_code ? '<span class="lbs-flag">'+flag(r.country_code)+'</span>' : '<span class="lbs-flag"></span>';
-      var pos = r[posKey] != null ? '#'+r[posKey] : '—';
-      var rat = r.rating != null ? String(r.rating).replace(/\B(?=(\d{3})+(?!\d))/g,' ') : '—';
+  function render(results) {
+    if (!results.length) {
+      rows.innerHTML = '<div class="lb-empty">No players found.</div>';
+      sub.textContent = 'No results';
+      return;
+    }
+    sub.textContent = results.length + ' player' + (results.length !== 1 ? 's' : '') + ' found';
+    rows.innerHTML = results.map(function(r) {
+      var pos = r[posKey];
+      var rowCls = 'lb-row' + (pos === 1 ? ' lb-r1' : pos === 2 ? ' lb-r2' : pos === 3 ? ' lb-r3' : '');
+      var posCls = 'lb-pos' + (pos === 1 ? ' pg' : pos === 2 ? ' ps' : pos === 3 ? ' pb' : (pos != null && pos <= 10) ? ' pt' : '');
+      var posLbl = pos === 1 ? '🥇' : pos === 2 ? '🥈' : pos === 3 ? '🥉' : (pos != null ? pos : '—');
+      var f = r.country_code ? '<span class="lb-flag">'+flag(r.country_code)+'</span>' : '';
+      var cc = r.country_code ? '<div class="lb-cc">'+r.country_code+'</div>' : '';
       var href = '/profile/'+encodeURIComponent(r.slug || r.id);
-      return '<a class="lb-search-item" href="'+href+'">'+f+'<span class="lbs-nick">'+r.nick+'</span><span class="lbs-pos">'+pos+'</span><span class="lbs-rat">'+rat+'</span></a>';
+      var rat = fmtRating(r[ratingKey] != null ? r[ratingKey] : r.rating);
+      return '<a class="'+rowCls+'" href="'+href+'">'
+        +'<div class="'+posCls+'">'+posLbl+'</div>'
+        +'<div class="lb-player">'+f+'<div class="lb-nick-wrap"><div class="lb-nick">'+r.nick+'</div>'+cc+'</div></div>'
+        +'<div class="lb-rating">'+rat+'</div>'
+        +'</a>';
     }).join('');
-    dropdown.hidden = false;
+  }
+
+  function restore() {
+    rows.innerHTML = originalRows;
+    sub.textContent = originalSub;
   }
 
   input.addEventListener('input', function () {
     clearTimeout(timer);
     var q = this.value.trim();
-    if (q.length < 2) { hide(); return; }
+    if (q.length < 2) { restore(); return; }
     timer = setTimeout(function () {
       fetch('/api/search?q='+encodeURIComponent(q))
         .then(function(res){return res.json();})
-        .then(show)
-        .catch(hide);
+        .then(render)
+        .catch(restore);
     }, 200);
   });
 
-  document.addEventListener('click', function (e) {
-    if (!dropdown.contains(e.target) && e.target !== input) hide();
-  });
-
   input.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') hide();
+    if (e.key === 'Escape') { input.value = ''; restore(); }
   });
 }());
 </script>
