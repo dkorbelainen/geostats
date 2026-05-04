@@ -411,7 +411,7 @@ async def search_accounts(
             Account.nick.ilike(f"%{q}%"),
             Account.last_polled_at.isnot(None),
         )
-        .order_by(Account.lookup_count.desc())
+        .order_by(RatingSnapshot.rating.desc().nullslast(), Account.lookup_count.desc())
         .limit(8)
         .all()
     )

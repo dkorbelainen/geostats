@@ -10,9 +10,9 @@ from geostats.ranker import compute_ranks
 def seeded_db(db):
     now = datetime.now(UTC)
     accounts = [
-        Account(id="a1", nick="Alpha", country_code="us", tracked=True, created_at=now),
-        Account(id="a2", nick="Beta", country_code="us", tracked=True, created_at=now),
-        Account(id="a3", nick="Gamma", country_code="fi", tracked=True, created_at=now),
+        Account(id="a1", nick="Alpha", country_code="us", tracked=True, created_at=now, last_polled_at=now),
+        Account(id="a2", nick="Beta", country_code="us", tracked=True, created_at=now, last_polled_at=now),
+        Account(id="a3", nick="Gamma", country_code="fi", tracked=True, created_at=now, last_polled_at=now),
     ]
     for a in accounts:
         db.add(a)

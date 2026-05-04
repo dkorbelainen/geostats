@@ -18,7 +18,7 @@ def compute_ranks(db: Session) -> None:
                 rs.rating_nmpz
             FROM rating_snapshots rs
             JOIN accounts a ON a.id = rs.account_id
-            WHERE a.tracked = true
+            WHERE a.last_polled_at IS NOT NULL
             ORDER BY rs.account_id, rs.captured_at DESC
         ),
         ranked AS (
