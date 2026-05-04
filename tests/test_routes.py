@@ -411,7 +411,7 @@ def test_leaderboard_limit_25_restricts_rows(client: TestClient, db: Session) ->
         _tracked_account(db, uid, f"Player{i}", 3000 - i)
     r = client.get("/leaderboard?limit=25")
     assert r.status_code == 200
-    assert r.text.count("lb-row") <= 25
+    assert r.text.count('<a class="lb-row') <= 25
 
 
 def test_leaderboard_invalid_limit_defaults_to_100(client: TestClient) -> None:
