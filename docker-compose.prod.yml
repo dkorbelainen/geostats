@@ -1,7 +1,14 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   db:
     image: postgres:16-alpine
     restart: unless-stopped
+    logging: *default-logging
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -17,6 +24,7 @@ services:
 
   migrate:
     build: .
+    logging: *default-logging
     command: alembic upgrade head
     environment:
       DATABASE_URL: >-
@@ -28,6 +36,7 @@ services:
 
   api:
     build: .
+    logging: *default-logging
     restart: unless-stopped
     environment:
       DATABASE_URL: >-
@@ -41,6 +50,7 @@ services:
 
   poller:
     build: .
+    logging: *default-logging
     restart: unless-stopped
     command: >
       sh -c "
@@ -69,6 +79,7 @@ services:
 
   caddy:
     image: caddy:2-alpine
+    logging: *default-logging
     restart: unless-stopped
     ports:
       - "80:80"
