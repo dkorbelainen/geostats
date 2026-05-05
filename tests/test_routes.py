@@ -336,7 +336,7 @@ def test_profile_renders_anomaly_card(client, db) -> None:
     resp = client.get("/profile/anoma")
     assert resp.status_code == 200
     body = resp.text
-    assert "Profile rarity" in body
+    assert "Anomaly detection" in body
     assert "85%" in body
     assert "Peak win streak" in body
     assert "Average distance" in body
@@ -368,7 +368,7 @@ def test_profile_hides_anomaly_card_below_threshold(client, db) -> None:
 
     resp = client.get("/profile/quieta")
     assert resp.status_code == 200
-    assert "Profile rarity" not in resp.text
+    assert "Anomaly detection" not in resp.text
 
 
 # ── /leaderboard ──────────────────────────────────────────────────────────────
