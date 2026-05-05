@@ -19,7 +19,8 @@
   🏆 <strong>Leaderboard</strong> — top 500 tracked players ranked by Overall / Moving / No Move / NMPZ<br>
   🔮 <strong>Percentile forecast</strong> — see where you'll land tomorrow<br>
   👥 <strong>Doppelganger</strong> — find players at your exact skill level<br>
-  🌍 <strong>Any player</strong> — look up anyone by nick, URL or ID
+  🌍 <strong>Any player</strong> — look up anyone by nick, URL or ID<br>
+  🚨 <strong>Anomaly detection</strong> — flags accounts with suspicious rating patterns
 </p>
 
 <img src="assets/divider.svg" width="100%" alt="">
