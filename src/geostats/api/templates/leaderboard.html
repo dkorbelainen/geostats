@@ -147,7 +147,7 @@
     var q = this.value.trim();
     if (q.length < 2) { restore(); return; }
     timer = setTimeout(function () {
-      fetch('/api/search?q='+encodeURIComponent(q))
+      fetch('/api/search?q='+encodeURIComponent(q)+'&mode='+encodeURIComponent(mode))
         .then(function(res){return res.json();})
         .then(render)
         .catch(restore);
