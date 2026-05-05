@@ -390,10 +390,12 @@ async def profile_page(
 @router.get("/api/search")
 async def search_accounts(
     q: str = Query(default=""),
+    mode: Literal["overall", "moving", "nomove", "nmpz"] = Query(default="overall"),
     db: Session = Depends(get_db),  # noqa: B008
 ) -> list[dict[str, object]]:
     if len(q) < 2:
         return []
+    rating_col, _ = _LB_MODE_FIELDS[mode]
     latest_snap_sq = (
         db.query(func.max(RatingSnapshot.captured_at))
         .filter(RatingSnapshot.account_id == Account.id)
@@ -411,7 +413,7 @@ async def search_accounts(
             Account.nick.ilike(f"%{q}%"),
             Account.last_polled_at.isnot(None),
         )
-        .order_by(RatingSnapshot.rating.desc().nullslast(), Account.lookup_count.desc())
+        .order_by(rating_col.desc().nullslast(), Account.lookup_count.desc())
         .limit(8)
         .all()
     )
