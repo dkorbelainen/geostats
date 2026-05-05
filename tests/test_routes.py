@@ -469,3 +469,22 @@ def test_search_no_results(client: TestClient) -> None:
     r = client.get("/api/search?q=zzznomatch")
     assert r.status_code == 200
     assert r.json() == []
+
+
+def test_search_sorts_by_rating_desc(client: TestClient, db: Session) -> None:
+    accounts = [
+        ("sortacc1aaaaaaaaaaaa", "panLOW", 645),
+        ("sortacc2bbbbbbbbbbbb", "panTOP", 1932),
+        ("sortacc3cccccccccccc", "panMID", 1523),
+        ("sortacc4dddddddddddd", "panBOT", 834),
+    ]
+    for acc_id, nick, rating in accounts:
+        db.add(Account(id=acc_id, nick=nick, created_at=_now(), last_polled_at=_now()))
+        db.flush()
+        db.add(RatingSnapshot(account_id=acc_id, captured_at=_now(), rating=rating))
+    db.flush()
+    r = client.get("/api/search?q=pan&mode=overall")
+    assert r.status_code == 200
+    data = r.json()
+    ratings = [row["rating"] for row in data]
+    assert ratings == sorted(ratings, reverse=True), ratings
