@@ -24,7 +24,8 @@ FEATURES: tuple[str, ...] = (
     "mean_guessed_first_rate",
     "winrate",
     "mean_avg_guess_distance_km",
-    "log_games",
+    "rating_efficiency",
+    "streak_efficiency",
 )
 _FEATURE_DIM = len(FEATURES)
 MIN_GAMES_PLAYED = 50
@@ -121,7 +122,8 @@ def _load_features(db: Session) -> list[_Row]:
                 float(r.mean_guessed_first_rate),
                 float(winrate),
                 float(r.mean_avg_guess_distance_km),
-                float(log_games),
+                float(r.peak_rating) / log_games,
+                float(r.peak_win_streak) / log_games,
             ],
             dtype=np.float64,
         )
