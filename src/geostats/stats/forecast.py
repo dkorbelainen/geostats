@@ -15,6 +15,7 @@ _MIN_POINTS = 5
 _MIN_SPAN_DAYS = 7
 _MAX_DAILY_DELTA = 150  # hard cap on slope contribution per day
 _RIDGE_ALPHA = 5.0      # L2 — shrinks aggressive slopes; effect scales with 1/n
+_MAX_LEVER = 2.5        # cap extrapolation leverage so whiskers don't blow up
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,9 +71,13 @@ def forecast_rating(
     current = float(ratings[-1])
     max_hist = float(np.max(ratings))
 
-    # Clamp delta so slope can't extrapolate beyond _MAX_DAILY_DELTA per day
+    # Clamp delta so slope can't extrapolate beyond _MAX_DAILY_DELTA per day.
+    # Apply sqrt dampening for long horizons — growth doesn't scale linearly.
     max_delta = float(_MAX_DAILY_DELTA * horizon_days)
-    clamped_delta = float(np.clip(predicted_raw - current, -max_delta, max_delta))
+    raw_delta = float(np.clip(predicted_raw - current, -max_delta, max_delta))
+    if horizon_days > 7:
+        raw_delta *= float(np.sqrt(7.0 / horizon_days))
+    clamped_delta = raw_delta
 
     # Ceiling: 8% above all-time high; floor: 0
     ceiling = max_hist * 1.08
@@ -85,7 +90,7 @@ def forecast_rating(
     x_new_sc = float(target_sc[0, 0])
     x_mean_sc = float(np.mean(X_sc))
     ss = float(np.sum((X_sc.ravel() - x_mean_sc) ** 2))
-    lever = 1.0 + 1.0 / n + (x_new_sc - x_mean_sc) ** 2 / max(ss, 1e-8)
+    lever = min(1.0 + 1.0 / n + (x_new_sc - x_mean_sc) ** 2 / max(ss, 1e-8), _MAX_LEVER)
     t_crit = float(scipy.stats.t.ppf(0.975, df=max(n - 2, 1)))
     confidence = int(round(std_res * t_crit * float(np.sqrt(lever))))
 
