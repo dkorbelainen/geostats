@@ -339,7 +339,7 @@ async def profile_page(
 
     total_tracked: int = (
         db.query(func.count(Account.id))
-        .filter(Account.tracked == True, Account.last_polled_at.isnot(None))  # noqa: E712
+        .filter(Account.last_polled_at.isnot(None))
         .scalar()
         or 0
     )

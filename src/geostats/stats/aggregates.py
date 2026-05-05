@@ -123,7 +123,7 @@ def summarize_profile(
     for f in RATING_FIELDS:
         pos: int | None = getattr(latest, f"position_{f}") if latest else None
         if pos is not None and total_tracked > 0:
-            pct[f] = round((1 - pos / total_tracked) * 100, 1)
+            pct[f] = max(0.0, round((1 - pos / total_tracked) * 100, 1))
         else:
             pct[f] = None
     return ProfileSummary(
