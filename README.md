@@ -16,6 +16,7 @@
 
 <p align="center">
   📈 <strong>Daily rating snapshots</strong> — watch your rank grow (or cry about it)<br>
+  🏆 <strong>Leaderboard</strong> — top 500 tracked players ranked by Overall / Moving / No Move / NMPZ<br>
   🔮 <strong>Percentile forecast</strong> — see where you'll land tomorrow<br>
   👥 <strong>Doppelganger</strong> — find players at your exact skill level<br>
   🌍 <strong>Any player</strong> — look up anyone by nick, URL or ID
