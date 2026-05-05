@@ -1,12 +1,21 @@
 from __future__ import annotations
 
+import math
 from datetime import UTC, datetime, timedelta
 
 import numpy as np
+from click.testing import CliRunner
 from sqlalchemy.orm import Session
 
+from geostats.cli import cli
 from geostats.models import Account, AccountAnomaly, RatingSnapshot
-from geostats.stats.anomalies import FEATURES, _load_features
+from geostats.stats.anomalies import (
+    CONFIDENCE_DISPLAY_THRESHOLD,
+    FEATURES,
+    MIN_POPULATION,
+    _load_features,
+    compute_anomalies,
+)
 
 
 def test_account_anomaly_persists(db: Session) -> None:
@@ -117,17 +126,11 @@ def test_load_features_aggregates_history(db: Session) -> None:
     assert feats["rating_delta"] == 200.0
     assert feats["peak_win_streak"] == 7.0
     assert feats["winrate"] == 120 / 200
-    assert feats["log_games"] == np.log1p(200)
-    # rating_volatility uses sample stddev across [1800, 2000] => 141.42...
+    assert "log_games" not in feats
+    log_g = math.log1p(200)
+    assert abs(feats["rating_efficiency"] - 2000.0 / log_g) < 1e-6
+    assert abs(feats["streak_efficiency"] - 7.0 / log_g) < 1e-6
     assert abs(feats["rating_volatility"] - np.std([1800.0, 2000.0], ddof=1)) < 1e-6
-
-
-from geostats.models import AccountAnomaly
-from geostats.stats.anomalies import (
-    CONFIDENCE_DISPLAY_THRESHOLD,
-    MIN_POPULATION,
-    compute_anomalies,
-)
 
 
 def _seed_typical(db: Session, account_id: str, *, rating: int, streak: int,
@@ -182,6 +185,33 @@ def test_compute_anomalies_writes_rows_and_finds_outlier(db: Session) -> None:
     assert outlier.confidence_pct > max(typical_pcts)
 
 
+def test_suspicious_low_games_high_rating_scores_above_legit(db: Session) -> None:
+    """Cheater pattern: high rating + high streak in few games should rank above
+    a legitimate top player with many games and equivalent rating."""
+    for i in range(MIN_POPULATION):
+        _seed_typical(
+            db, f"u{i:03d}", rating=1400 + (i % 5) * 10, streak=2 + i % 3,
+            gfr=0.35 + (i % 4) * 0.01, played=300 + i * 2, won=160 + i,
+            dist_km=320.0 + (i % 5),
+        )
+    # legitimate top player: many games, high rating, moderate streak
+    _seed_typical(
+        db, "legit_top", rating=2400, streak=8,
+        gfr=0.70, played=3000, won=2100, dist_km=90.0,
+    )
+    # suspicious: same high rating, tiny game count, extreme streak
+    _seed_typical(
+        db, "suspicious", rating=2300, streak=26,
+        gfr=0.90, played=240, won=230, dist_km=180.0,
+    )
+    db.commit()
+
+    compute_anomalies(db)
+
+    rows = {r.account_id: r for r in db.query(AccountAnomaly).all()}
+    assert rows["suspicious"].confidence_pct > rows["legit_top"].confidence_pct
+
+
 def test_compute_anomalies_replaces_previous_results(db: Session) -> None:
     for i in range(MIN_POPULATION + 1):
         _seed_typical(
@@ -197,11 +227,6 @@ def test_compute_anomalies_replaces_previous_results(db: Session) -> None:
     n2 = compute_anomalies(db)
     assert n2 == MIN_POPULATION + 1
     assert db.query(AccountAnomaly).count() == n2
-
-
-from click.testing import CliRunner
-
-from geostats.cli import cli
 
 
 def test_compute_anomalies_cli_smoke(monkeypatch, db: Session) -> None:
