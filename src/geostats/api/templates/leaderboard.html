@@ -87,7 +87,7 @@
       </div>
     </div>
 
-    <p class="lb-note">Rankings among all polled players · updates every ~12 h</p>
+    <p class="lb-note">Rankings among all polled players · updated {{ last_updated | time_ago if last_updated else "—" }} · refreshes every ~12 h</p>
   </div>
 
 </div>

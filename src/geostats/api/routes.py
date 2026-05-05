@@ -227,10 +227,13 @@ async def leaderboard(
         .limit(limit)
         .all()
     )
+    last_updated: datetime | None = (
+        db.query(func.max(RatingSnapshot.captured_at)).scalar()
+    )
     return templates.TemplateResponse(
         request,
         "leaderboard.html",
-        {"rows": rows, "mode": mode, "limit": limit},
+        {"rows": rows, "mode": mode, "limit": limit, "last_updated": last_updated},
     )
 
 
