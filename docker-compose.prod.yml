@@ -56,16 +56,13 @@ services:
       sh -c "
         TICK=0;
         while true; do
-          if [ $((TICK % 4)) -eq 0 ]; then
-            geostats poll-top --limit 500;
-            if [ $((TICK % 28)) -eq 0 ]; then
-              geostats poll-discover;
-              geostats compute-matches;
-              geostats compute-anomalies;
-            fi;
-          else
-            geostats poll-new --limit 100;
+          geostats poll-top --limit 500;
+          if [ $((TICK % 28)) -eq 0 ]; then
+            geostats poll-discover;
+            geostats compute-matches;
+            geostats compute-anomalies;
           fi;
+          geostats poll-new --limit 100;
           TICK=$((TICK + 1));
           sleep $((21600 + RANDOM % 2400 - 1200));
         done"
