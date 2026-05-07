@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -93,17 +93,23 @@ def _upsert_accounts(ids: list[str]) -> set[str]:
     return new_ids
 
 
+_MIN_POLL_GAP = timedelta(hours=4)
+
+
 async def _run_poll(
     client: GeoClient, account_ids: list[str], delay: float, fetch_info_ids: set[str]
 ) -> None:
-    today_utc = datetime.now(UTC).date()
+    now_utc = datetime.now(UTC)
     with session_scope() as db:
         rows = db.query(Account.id, Account.last_polled_at).filter(Account.id.in_(account_ids)).all()
-    polled_today = {r.id for r in rows if r.last_polled_at is not None and r.last_polled_at.date() == today_utc}
+    polled_recently = {
+        r.id for r in rows
+        if r.last_polled_at is not None and (now_utc - r.last_polled_at) < _MIN_POLL_GAP
+    }
 
-    ids = [aid for aid in account_ids if aid not in polled_today]
-    if polled_today:
-        log.debug("skipping %d accounts already polled today", len(polled_today))
+    ids = [aid for aid in account_ids if aid not in polled_recently]
+    if polled_recently:
+        log.debug("skipping %d accounts polled in last 4h", len(polled_recently))
     random.shuffle(ids)
     next_break = random.randint(30, 60)
     for i, account_id in enumerate(ids):
