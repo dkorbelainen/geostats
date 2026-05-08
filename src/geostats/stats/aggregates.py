@@ -31,11 +31,13 @@ def current_rating(
 def current_position(
     snaps: list[RatingSnapshot], field: Literal["overall", "moving", "nomove", "nmpz"]
 ) -> int | None:
+    rating_attr = _FIELD_ATTR[field]
     pos_attr = f"position_{field}"
     for snap in reversed(snaps):
-        v: int | None = getattr(snap, pos_attr)
-        if v is not None:
-            return v
+        pos: int | None = getattr(snap, pos_attr)
+        rating: int | None = getattr(snap, rating_attr)
+        if pos is not None and rating is not None:
+            return pos
     return None
 
 
@@ -124,10 +126,12 @@ class ProfileSummary:
 
 
 def _current_country_position(snaps: list[RatingSnapshot]) -> int | None:
+    # country rank is computed from the overall rating, so require both.
     for snap in reversed(snaps):
-        v: int | None = getattr(snap, "position_country", None)
-        if v is not None:
-            return v
+        pos: int | None = getattr(snap, "position_country", None)
+        rating: int | None = getattr(snap, "rating", None)
+        if pos is not None and rating is not None:
+            return pos
     return None
 
 
