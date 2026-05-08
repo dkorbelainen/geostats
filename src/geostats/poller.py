@@ -69,27 +69,25 @@ async def poll_account(client: GeoClient, account_id: str, delay: float = 3.0) -
 def _upsert_accounts(ids: list[str]) -> set[str]:
     now = datetime.now(UTC)
     unique_ids = list(dict.fromkeys(ids))
+    if not unique_ids:
+        return set()
     with session_scope() as db:
         existing = {row.id for row in db.query(Account.id).all()}
         new_ids = {uid for uid in unique_ids if uid not in existing}
-        if unique_ids:
-            db.execute(
-                pg_insert(Account).on_conflict_do_update(
-                    index_elements=["id"], set_={"tracked": True}
-                ),
-                [
-                    {
-                        "id": uid, "nick": uid, "country_code": None, "level": None,
-                        "is_pro": False, "pin_url": None, "tracked": True,
-                        "created_at": now, "last_polled_at": None, "last_error": None,
-                        "lookup_count": 0,
-                    }
-                    for uid in unique_ids
-                ],
-            )
-            db.query(Account).filter(
-                Account.id.notin_(unique_ids), Account.tracked == True  # noqa: E712
-            ).update({"tracked": False}, synchronize_session=False)
+        db.execute(
+            pg_insert(Account).on_conflict_do_update(
+                index_elements=["id"], set_={"tracked": True}
+            ),
+            [
+                {
+                    "id": uid, "nick": uid, "country_code": None, "level": None,
+                    "is_pro": False, "pin_url": None, "tracked": True,
+                    "created_at": now, "last_polled_at": None, "last_error": None,
+                    "lookup_count": 0,
+                }
+                for uid in unique_ids
+            ],
+        )
     return new_ids
 
 
@@ -110,7 +108,6 @@ async def _run_poll(
     ids = [aid for aid in account_ids if aid not in polled_recently]
     if polled_recently:
         log.debug("skipping %d accounts polled in last 4h", len(polled_recently))
-    random.shuffle(ids)
     next_break = random.randint(30, 60)
     for i, account_id in enumerate(ids):
         if i == next_break:
@@ -169,6 +166,7 @@ async def run_full_poll(ncfa_cookie: str, delay: float) -> None:
                 .filter(Account.id.in_(unique_ids), Account.pin_url.is_(None))
                 .all()
             }
+        random.shuffle(unique_ids)
         await _run_poll(client, unique_ids, delay, new_ids | no_pin)
 
     with session_scope() as db:
@@ -193,6 +191,7 @@ async def run_new_poll(ncfa_cookie: str, delay: float, limit: int | None = None)
     if not new_ids:
         return
 
+    random.shuffle(new_ids)
     async with _make_client(ncfa_cookie) as client:
         await _run_poll(client, new_ids, delay, set(new_ids))  # all new → fetch info
 
@@ -223,8 +222,15 @@ async def run_top_poll(ncfa_cookie: str, delay: float, limit: int) -> None:
         r.account_id
         for r in sorted(rows, key=lambda r: -(r.rating or 0))[:limit]
     ]
-    all_ids = list(dict.fromkeys(top_ids + list(lookup_ids)))
-    log.info("top-%d poll: %d accounts (%d from lookups)", limit, len(all_ids), len(lookup_ids))
+    top_set = set(top_ids)
+    extra_lookups = [aid for aid in lookup_ids if aid not in top_set]
+    random.shuffle(top_ids)
+    random.shuffle(extra_lookups)
+    all_ids = top_ids + extra_lookups
+    log.info(
+        "top-%d poll: %d accounts (%d top, %d extra lookups)",
+        limit, len(all_ids), len(top_ids), len(extra_lookups),
+    )
 
     with session_scope() as db:
         no_pin = {
