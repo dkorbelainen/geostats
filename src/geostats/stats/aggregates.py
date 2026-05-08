@@ -28,6 +28,17 @@ def current_rating(
     return None
 
 
+def current_position(
+    snaps: list[RatingSnapshot], field: Literal["overall", "moving", "nomove", "nmpz"]
+) -> int | None:
+    pos_attr = f"position_{field}"
+    for snap in reversed(snaps):
+        v: int | None = getattr(snap, pos_attr)
+        if v is not None:
+            return v
+    return None
+
+
 def delta_over_period(
     snaps: list[RatingSnapshot],
     field: Literal["overall", "moving", "nomove", "nmpz"],
@@ -103,11 +114,21 @@ class ProfileSummary:
     account: Account
     snaps: list[RatingSnapshot]
     current: dict[str, int | None]
+    position: dict[str, int | None]
+    position_country: int | None
     delta_7d: dict[str, int | None]
     delta_30d: dict[str, int | None]
     record: dict[str, Record | None]
     avg_per_week_30d: dict[str, float | None]
     percentile: dict[str, float | None]
+
+
+def _current_country_position(snaps: list[RatingSnapshot]) -> int | None:
+    for snap in reversed(snaps):
+        v: int | None = getattr(snap, "position_country", None)
+        if v is not None:
+            return v
+    return None
 
 
 def summarize_profile(
@@ -118,10 +139,13 @@ def summarize_profile(
     now = datetime.now(tz=timezone.utc)  # noqa: UP017
     w7 = timedelta(days=7)
     w30 = timedelta(days=30)
-    latest = snaps[-1] if snaps else None
+    positions: dict[str, int | None] = {
+        f: current_position(snaps, f)  # type: ignore[arg-type]
+        for f in RATING_FIELDS
+    }
     pct: dict[str, float | None] = {}
     for f in RATING_FIELDS:
-        pos: int | None = getattr(latest, f"position_{f}") if latest else None
+        pos = positions[f]
         if pos is not None and total_tracked > 0:
             pct[f] = max(0.0, round((1 - pos / total_tracked) * 100, 1))
         else:
@@ -133,6 +157,8 @@ def summarize_profile(
             f: current_rating(snaps, f)  # type: ignore[arg-type]
             for f in RATING_FIELDS
         },
+        position=positions,
+        position_country=_current_country_position(snaps),
         delta_7d={
             f: delta_over_period(snaps, f, now=now, window=w7)  # type: ignore[arg-type]
             for f in RATING_FIELDS
