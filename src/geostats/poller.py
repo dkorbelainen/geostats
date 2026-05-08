@@ -206,21 +206,21 @@ async def run_new_poll(ncfa_cookie: str, delay: float, limit: int | None = None)
     log.info("new accounts polled and ranks computed")
 
 
-_FAIR_GAP = timedelta(hours=22)
-_TOP_GAP = timedelta(hours=11)
+_DAILY_GAP = timedelta(hours=22)
+_FILLER_GAP = timedelta(hours=60)
+_MAIN_RATING_THRESHOLD = 800
 
 
-async def run_top_poll(ncfa_cookie: str, delay: float, limit: int) -> None:
+async def run_top_poll(ncfa_cookie: str, delay: float, limit: int) -> None:  # noqa: ARG001
     from geostats.ranker import compute_ranks  # noqa: PLC0415
 
     with session_scope() as db:
         ordered_rows = (
-            db.query(Account.id)
+            db.query(Account.id, Account.last_polled_at)
             .filter(Account.tracked == True)  # noqa: E712
             .order_by(Account.last_polled_at.asc().nullsfirst())
             .all()
         )
-        ordered_ids = [r.id for r in ordered_rows]
 
         rating_rows = db.execute(text("""
             SELECT DISTINCT ON (rs.account_id) rs.account_id, rs.rating
@@ -229,32 +229,49 @@ async def run_top_poll(ncfa_cookie: str, delay: float, limit: int) -> None:
             WHERE a.tracked = true AND rs.rating IS NOT NULL
             ORDER BY rs.account_id, rs.captured_at DESC
         """)).fetchall()
-        top_ids = [
-            r.account_id
-            for r in sorted(rating_rows, key=lambda r: -(r.rating or 0))[:limit]
-        ]
+        rating_map = {r.account_id: r.rating for r in rating_rows}
 
+        new_ids: list[str] = []
+        main_ids: list[str] = []
+        filler_ids: list[str] = []
+        for r in ordered_rows:
+            if r.last_polled_at is None:
+                new_ids.append(r.id)
+                continue
+            rating = rating_map.get(r.id)
+            if rating is None or rating >= _MAIN_RATING_THRESHOLD:
+                main_ids.append(r.id)
+            else:
+                filler_ids.append(r.id)
+
+        all_referenced = set(new_ids) | set(main_ids) | set(filler_ids)
         no_pin = {
             row.id for row in db.query(Account.id)
-            .filter(
-                Account.id.in_(set(ordered_ids) | set(top_ids)),
-                Account.pin_url.is_(None),
-            )
+            .filter(Account.id.in_(all_referenced), Account.pin_url.is_(None))
             .all()
         }
 
     log.info(
-        "fair poll: %d tracked (oldest first), top boost: %d",
-        len(ordered_ids), len(top_ids),
+        "tiered poll: %d new (unpolled), %d main (≥%d), %d filler (<%d)",
+        len(new_ids),
+        len(main_ids), _MAIN_RATING_THRESHOLD,
+        len(filler_ids), _MAIN_RATING_THRESHOLD,
     )
 
     async with _make_client(ncfa_cookie) as client:
-        await _run_poll(client, ordered_ids, delay, no_pin, min_gap=_FAIR_GAP)
+        # Pass 1: never-polled accounts — fetch profile info too, no gap
+        await _run_poll(client, new_ids, delay, set(new_ids), min_gap=timedelta(0))
+        if new_ids:
+            with session_scope() as db:
+                compute_ranks(db)
+            log.info("ranks computed after new pass")
+        # Pass 2: main tier — once per day
+        await _run_poll(client, main_ids, delay, no_pin, min_gap=_DAILY_GAP)
         with session_scope() as db:
             compute_ranks(db)
-        log.info("ranks computed after fair pass")
-        random.shuffle(top_ids)
-        await _run_poll(client, top_ids, delay, no_pin, min_gap=_TOP_GAP)
+        log.info("ranks computed after main pass")
+        # Pass 3: filler — low rating outliers, slower cadence
+        await _run_poll(client, filler_ids, delay, no_pin, min_gap=_FILLER_GAP)
 
     with session_scope() as db:
         compute_ranks(db)
