@@ -250,6 +250,9 @@ async def run_top_poll(ncfa_cookie: str, delay: float, limit: int) -> None:
 
     async with _make_client(ncfa_cookie) as client:
         await _run_poll(client, ordered_ids, delay, no_pin, min_gap=_FAIR_GAP)
+        with session_scope() as db:
+            compute_ranks(db)
+        log.info("ranks computed after fair pass")
         random.shuffle(top_ids)
         await _run_poll(client, top_ids, delay, no_pin, min_gap=_TOP_GAP)
 
