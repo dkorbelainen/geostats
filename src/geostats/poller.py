@@ -95,19 +95,25 @@ _MIN_POLL_GAP = timedelta(hours=4)
 
 
 async def _run_poll(
-    client: GeoClient, account_ids: list[str], delay: float, fetch_info_ids: set[str]
+    client: GeoClient,
+    account_ids: list[str],
+    delay: float,
+    fetch_info_ids: set[str],
+    min_gap: timedelta = _MIN_POLL_GAP,
 ) -> None:
+    if not account_ids:
+        return
     now_utc = datetime.now(UTC)
     with session_scope() as db:
         rows = db.query(Account.id, Account.last_polled_at).filter(Account.id.in_(account_ids)).all()
     polled_recently = {
         r.id for r in rows
-        if r.last_polled_at is not None and (now_utc - r.last_polled_at) < _MIN_POLL_GAP
+        if r.last_polled_at is not None and (now_utc - r.last_polled_at) < min_gap
     }
 
     ids = [aid for aid in account_ids if aid not in polled_recently]
     if polled_recently:
-        log.debug("skipping %d accounts polled in last 4h", len(polled_recently))
+        log.debug("skipping %d accounts polled within %s", len(polled_recently), min_gap)
     next_break = random.randint(30, 60)
     for i, account_id in enumerate(ids):
         if i == next_break:
@@ -200,47 +206,52 @@ async def run_new_poll(ncfa_cookie: str, delay: float, limit: int | None = None)
     log.info("new accounts polled and ranks computed")
 
 
+_FAIR_GAP = timedelta(hours=22)
+_TOP_GAP = timedelta(hours=11)
+
+
 async def run_top_poll(ncfa_cookie: str, delay: float, limit: int) -> None:
     from geostats.ranker import compute_ranks  # noqa: PLC0415
 
     with session_scope() as db:
-        rows = db.execute(text("""
+        ordered_rows = (
+            db.query(Account.id)
+            .filter(Account.tracked == True)  # noqa: E712
+            .order_by(Account.last_polled_at.asc().nullsfirst())
+            .all()
+        )
+        ordered_ids = [r.id for r in ordered_rows]
+
+        rating_rows = db.execute(text("""
             SELECT DISTINCT ON (rs.account_id) rs.account_id, rs.rating
             FROM rating_snapshots rs
             JOIN accounts a ON a.id = rs.account_id
             WHERE a.tracked = true AND rs.rating IS NOT NULL
             ORDER BY rs.account_id, rs.captured_at DESC
         """)).fetchall()
+        top_ids = [
+            r.account_id
+            for r in sorted(rating_rows, key=lambda r: -(r.rating or 0))[:limit]
+        ]
 
-        lookup_ids = {
-            row.id for row in db.query(Account.id)
-            .filter(Account.lookup_count > 0, Account.tracked == True)  # noqa: E712
-            .all()
-        }
-
-    top_ids = [
-        r.account_id
-        for r in sorted(rows, key=lambda r: -(r.rating or 0))[:limit]
-    ]
-    top_set = set(top_ids)
-    extra_lookups = [aid for aid in lookup_ids if aid not in top_set]
-    random.shuffle(top_ids)
-    random.shuffle(extra_lookups)
-    all_ids = top_ids + extra_lookups
-    log.info(
-        "top-%d poll: %d accounts (%d top, %d extra lookups)",
-        limit, len(all_ids), len(top_ids), len(extra_lookups),
-    )
-
-    with session_scope() as db:
         no_pin = {
             row.id for row in db.query(Account.id)
-            .filter(Account.id.in_(all_ids), Account.pin_url.is_(None))
+            .filter(
+                Account.id.in_(set(ordered_ids) | set(top_ids)),
+                Account.pin_url.is_(None),
+            )
             .all()
         }
 
+    log.info(
+        "fair poll: %d tracked (oldest first), top boost: %d",
+        len(ordered_ids), len(top_ids),
+    )
+
     async with _make_client(ncfa_cookie) as client:
-        await _run_poll(client, all_ids, delay, no_pin)
+        await _run_poll(client, ordered_ids, delay, no_pin, min_gap=_FAIR_GAP)
+        random.shuffle(top_ids)
+        await _run_poll(client, top_ids, delay, no_pin, min_gap=_TOP_GAP)
 
     with session_scope() as db:
         compute_ranks(db)
