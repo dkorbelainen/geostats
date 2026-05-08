@@ -131,6 +131,9 @@ _ANOMALY_LABELS: dict[str, str] = {
     "mean_avg_guess_distance_km": "Average distance",
     "rating_efficiency": "Rating efficiency",
     "streak_efficiency": "Streak efficiency",
+    "log_games_played": "Games played",
+    "account_level": "Account level",
+    "rating_per_level": "Rating-to-level",
 }
 
 
