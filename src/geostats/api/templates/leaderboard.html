@@ -32,7 +32,7 @@
   <div class="lb-content">
     <p class="lb-page-title">Leaderboard</p>
     <p class="lb-page-sub" id="lb-page-sub">
-      {% if country %}Top {{ limit }} players in {{ country | country_flag }} {{ country }}
+      {% if country %}Top {{ limit }} players in {{ country | country_flag }} <span data-cc-name="{{ country }}">{{ country }}</span>
       {% else %}Top {{ limit }} players tracked by GeoStats{% endif %}
     </p>
 
@@ -46,7 +46,7 @@
       <div class="lb-country-wrap" id="lb-country-wrap">
         <button type="button" class="lb-country-btn" id="lb-country-btn" aria-haspopup="listbox" aria-expanded="false">
           <span class="lb-country-cur">
-            {% if country %}<span class="lb-country-flag">{{ country | country_flag }}</span><span class="lb-country-lbl">{{ country }}</span>
+            {% if country %}<span class="lb-country-flag">{{ country | country_flag }}</span><span class="lb-country-lbl" data-cc-name="{{ country }}">{{ country }}</span>
             {% else %}<span class="lb-country-flag">🌎</span><span class="lb-country-lbl">Worldwide</span>{% endif %}
           </span>
           <span class="lb-country-caret">▾</span>
@@ -105,7 +105,7 @@
       </div>
     </div>
 
-    <p class="lb-note">Rankings among all polled players · updated {{ last_updated | time_ago if last_updated else "—" }} · refreshes every ~12 h</p>
+    <p class="lb-note">Updated {{ last_updated | time_ago if last_updated else "—" }} · refreshes a few times a day</p>
   </div>
 
 </div>
@@ -188,6 +188,23 @@
   var ccList = document.getElementById('lb-country-list');
   var ccWrap = document.getElementById('lb-country-wrap');
 
+  var regionNames = (typeof Intl !== 'undefined' && Intl.DisplayNames)
+    ? new Intl.DisplayNames(['en'], {type: 'region'}) : null;
+  function ccName(code) {
+    if (!code) return '';
+    if (code === 'ZZ') return 'Unknown';
+    if (regionNames) {
+      try { var n = regionNames.of(code); if (n && n !== code) return n; } catch (_) {}
+    }
+    return code;
+  }
+
+  // upgrade SSR placeholders to full names
+  document.querySelectorAll('[data-cc-name]').forEach(function(el) {
+    var c = el.getAttribute('data-cc-name');
+    if (c) el.textContent = ccName(c);
+  });
+
   function buildUrl(cc) {
     var u = '/leaderboard?mode='+encodeURIComponent(mode)+'&limit='+encodeURIComponent(limit);
     if (cc) u += '&country='+encodeURIComponent(cc);
@@ -195,15 +212,16 @@
   }
 
   function renderCountryList(filter) {
-    var f = (filter || '').trim().toUpperCase();
-    var items = [{code: '', count: null, label: 'Worldwide', flag: '🌎'}];
+    var f = (filter || '').trim().toLowerCase();
+    var items = [{code: '', count: null, name: 'Worldwide', flag: '🌎'}];
     countries.forEach(function(c) {
-      items.push({code: c.code, count: c.count, label: c.code, flag: flag(c.code)});
+      items.push({code: c.code, count: c.count, name: ccName(c.code), flag: flag(c.code)});
     });
     var matched = items.filter(function(it) {
       if (!f) return true;
-      if (it.code === '') return 'WORLDWIDE'.indexOf(f) !== -1;
-      return it.code.indexOf(f) !== -1;
+      if (it.code === '') return 'worldwide'.indexOf(f) !== -1;
+      return it.name.toLowerCase().indexOf(f) !== -1
+          || it.code.toLowerCase().indexOf(f) !== -1;
     });
     if (!matched.length) {
       ccList.innerHTML = '<li class="lb-country-empty">No match</li>';
@@ -212,9 +230,10 @@
     ccList.innerHTML = matched.map(function(it) {
       var act = it.code === country ? ' active' : '';
       var cnt = it.count != null ? '<span class="lb-country-cnt">'+it.count+'</span>' : '';
+      var esc = it.name.replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});
       return '<li class="lb-country-opt'+act+'" role="option" data-code="'+it.code+'">'
         +'<span class="lb-country-flag">'+it.flag+'</span>'
-        +'<span class="lb-country-lbl">'+it.label+'</span>'
+        +'<span class="lb-country-lbl">'+esc+'</span>'
         +cnt+'</li>';
     }).join('');
   }
