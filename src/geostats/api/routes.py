@@ -203,10 +203,14 @@ async def leaderboard(
     request: Request,
     mode: Literal["overall", "moving", "nomove", "nmpz"] = Query(default="overall"),
     limit: int = Query(default=100, ge=1),
+    country: str | None = Query(default=None),
     db: Session = Depends(get_db),  # noqa: B008
 ) -> Response:
     if limit not in _LB_VALID_LIMITS:
         limit = 100
+    cc = country.strip().upper() if country else None
+    if cc is not None and (len(cc) != _CC_LEN or not cc.isalpha()):
+        cc = None
     rating_col, pos_col = _LB_MODE_FIELDS[mode]
     latest_snap_sq = (
         db.query(func.max(RatingSnapshot.captured_at))
@@ -214,7 +218,7 @@ async def leaderboard(
         .correlate(Account)
         .scalar_subquery()
     )
-    rows = (
+    q = (
         db.query(Account, RatingSnapshot)
         .join(
             RatingSnapshot,
@@ -226,17 +230,47 @@ async def leaderboard(
             Account.last_polled_at.isnot(None),
             rating_col.isnot(None),
         )
-        .order_by(rating_col.desc())
-        .limit(limit)
+    )
+    if cc is not None:
+        q = q.filter(func.upper(Account.country_code) == cc)
+    rows = q.order_by(rating_col.desc()).limit(limit).all()
+
+    countries_q = (
+        db.query(
+            func.upper(Account.country_code).label("cc"),
+            func.count(Account.id).label("n"),
+        )
+        .join(
+            RatingSnapshot,
+            (RatingSnapshot.account_id == Account.id)
+            & (RatingSnapshot.captured_at == latest_snap_sq),
+        )
+        .filter(
+            Account.tracked == True,  # noqa: E712
+            Account.last_polled_at.isnot(None),
+            Account.country_code.isnot(None),
+            rating_col.isnot(None),
+        )
+        .group_by(func.upper(Account.country_code))
+        .order_by(func.count(Account.id).desc())
         .all()
     )
+    countries = [{"code": r.cc, "count": r.n} for r in countries_q if r.cc]
+
     last_updated: datetime | None = (
         db.query(func.max(RatingSnapshot.captured_at)).scalar()
     )
     return templates.TemplateResponse(
         request,
         "leaderboard.html",
-        {"rows": rows, "mode": mode, "limit": limit, "last_updated": last_updated},
+        {
+            "rows": rows,
+            "mode": mode,
+            "limit": limit,
+            "country": cc,
+            "countries": countries,
+            "last_updated": last_updated,
+        },
     )
 
 
@@ -401,10 +435,14 @@ async def profile_page(
 async def search_accounts(
     q: str = Query(default=""),
     mode: Literal["overall", "moving", "nomove", "nmpz"] = Query(default="overall"),
+    country: str | None = Query(default=None),
     db: Session = Depends(get_db),  # noqa: B008
 ) -> list[dict[str, object]]:
     if len(q) < 2:
         return []
+    cc = country.strip().upper() if country else None
+    if cc is not None and (len(cc) != _CC_LEN or not cc.isalpha()):
+        cc = None
     rating_col, _ = _LB_MODE_FIELDS[mode]
     latest_snap_sq = (
         db.query(func.max(RatingSnapshot.captured_at))
@@ -412,7 +450,7 @@ async def search_accounts(
         .correlate(Account)
         .scalar_subquery()
     )
-    rows = (
+    base = (
         db.query(Account, RatingSnapshot)
         .outerjoin(
             RatingSnapshot,
@@ -423,7 +461,11 @@ async def search_accounts(
             Account.nick.ilike(f"%{q}%"),
             Account.last_polled_at.isnot(None),
         )
-        .order_by(rating_col.desc().nullslast(), Account.lookup_count.desc())
+    )
+    if cc is not None:
+        base = base.filter(func.upper(Account.country_code) == cc)
+    rows = (
+        base.order_by(rating_col.desc().nullslast(), Account.lookup_count.desc())
         .limit(8)
         .all()
     )
