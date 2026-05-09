@@ -31,14 +31,31 @@
 
   <div class="lb-content">
     <p class="lb-page-title">Leaderboard</p>
-    <p class="lb-page-sub" id="lb-page-sub">Top {{ limit }} players tracked by GeoStats</p>
+    <p class="lb-page-sub" id="lb-page-sub">
+      {% if country %}Top {{ limit }} players in {{ country | country_flag }} {{ country }}
+      {% else %}Top {{ limit }} players tracked by GeoStats{% endif %}
+    </p>
 
     <div class="lb-controls">
       <div class="lb-limit-pills">
         {% for n in [25, 100, 250, 500] %}
         <a class="lb-limit-pill{% if limit == n %} active{% endif %}"
-           href="/leaderboard?mode={{ mode }}&amp;limit={{ n }}">{{ n }}</a>
+           href="/leaderboard?mode={{ mode }}&amp;limit={{ n }}{% if country %}&amp;country={{ country }}{% endif %}">{{ n }}</a>
         {% endfor %}
+      </div>
+      <div class="lb-country-wrap" id="lb-country-wrap">
+        <button type="button" class="lb-country-btn" id="lb-country-btn" aria-haspopup="listbox" aria-expanded="false">
+          <span class="lb-country-cur">
+            {% if country %}<span class="lb-country-flag">{{ country | country_flag }}</span><span class="lb-country-lbl">{{ country }}</span>
+            {% else %}<span class="lb-country-flag">🌎</span><span class="lb-country-lbl">Worldwide</span>{% endif %}
+          </span>
+          <span class="lb-country-caret">▾</span>
+        </button>
+        <div class="lb-country-pop" id="lb-country-pop" hidden>
+          <input class="lb-country-input" id="lb-country-input" type="text"
+                 placeholder="Search country…" autocomplete="off" spellcheck="false">
+          <ul class="lb-country-list" id="lb-country-list" role="listbox"></ul>
+        </div>
       </div>
       <div class="lb-search-wrap">
         <input class="lb-search" type="text" id="lb-search-input"
@@ -47,10 +64,11 @@
     </div>
 
     <div class="lb-tabs">
-      <a class="lb-tab{% if mode == 'overall' %} active{% endif %}" href="/leaderboard?mode=overall">Overall</a>
-      <a class="lb-tab{% if mode == 'moving' %} active{% endif %}" href="/leaderboard?mode=moving">Moving</a>
-      <a class="lb-tab{% if mode == 'nomove' %} active{% endif %}" href="/leaderboard?mode=nomove">No Move</a>
-      <a class="lb-tab{% if mode == 'nmpz' %} active{% endif %}" href="/leaderboard?mode=nmpz">NMPZ</a>
+      {% set _q = '&limit=' ~ limit ~ ('&country=' ~ country if country else '') %}
+      <a class="lb-tab{% if mode == 'overall' %} active{% endif %}" href="/leaderboard?mode=overall{{ _q }}">Overall</a>
+      <a class="lb-tab{% if mode == 'moving' %} active{% endif %}" href="/leaderboard?mode=moving{{ _q }}">Moving</a>
+      <a class="lb-tab{% if mode == 'nomove' %} active{% endif %}" href="/leaderboard?mode=nomove{{ _q }}">No Move</a>
+      <a class="lb-tab{% if mode == 'nmpz' %} active{% endif %}" href="/leaderboard?mode=nmpz{{ _q }}">NMPZ</a>
     </div>
 
     <div class="lb-table">
@@ -97,6 +115,9 @@
   var rows = document.getElementById('lb-rows');
   var sub = document.getElementById('lb-page-sub');
   var mode = {{ mode | tojson }};
+  var limit = {{ limit | tojson }};
+  var country = {{ (country or '') | tojson }};
+  var countries = {{ countries | tojson }};
   var posKey = {overall:'position_overall',moving:'position_moving',nomove:'position_nomove',nmpz:'position_nmpz'}[mode] || 'position_overall';
   var ratingKey = {overall:'rating',moving:'rating_moving',nomove:'rating_nomove',nmpz:'rating_nmpz'}[mode] || 'rating';
   var originalRows = rows.innerHTML;
@@ -147,7 +168,9 @@
     var q = this.value.trim();
     if (q.length < 2) { restore(); return; }
     timer = setTimeout(function () {
-      fetch('/api/search?q='+encodeURIComponent(q)+'&mode='+encodeURIComponent(mode))
+      var url = '/api/search?q='+encodeURIComponent(q)+'&mode='+encodeURIComponent(mode);
+      if (country) url += '&country='+encodeURIComponent(country);
+      fetch(url)
         .then(function(res){return res.json();})
         .then(render)
         .catch(restore);
@@ -156,6 +179,77 @@
 
   input.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') { input.value = ''; restore(); }
+  });
+
+  // ---- country combobox ----
+  var ccBtn = document.getElementById('lb-country-btn');
+  var ccPop = document.getElementById('lb-country-pop');
+  var ccInput = document.getElementById('lb-country-input');
+  var ccList = document.getElementById('lb-country-list');
+  var ccWrap = document.getElementById('lb-country-wrap');
+
+  function buildUrl(cc) {
+    var u = '/leaderboard?mode='+encodeURIComponent(mode)+'&limit='+encodeURIComponent(limit);
+    if (cc) u += '&country='+encodeURIComponent(cc);
+    return u;
+  }
+
+  function renderCountryList(filter) {
+    var f = (filter || '').trim().toUpperCase();
+    var items = [{code: '', count: null, label: 'Worldwide', flag: '🌎'}];
+    countries.forEach(function(c) {
+      items.push({code: c.code, count: c.count, label: c.code, flag: flag(c.code)});
+    });
+    var matched = items.filter(function(it) {
+      if (!f) return true;
+      if (it.code === '') return 'WORLDWIDE'.indexOf(f) !== -1;
+      return it.code.indexOf(f) !== -1;
+    });
+    if (!matched.length) {
+      ccList.innerHTML = '<li class="lb-country-empty">No match</li>';
+      return;
+    }
+    ccList.innerHTML = matched.map(function(it) {
+      var act = it.code === country ? ' active' : '';
+      var cnt = it.count != null ? '<span class="lb-country-cnt">'+it.count+'</span>' : '';
+      return '<li class="lb-country-opt'+act+'" role="option" data-code="'+it.code+'">'
+        +'<span class="lb-country-flag">'+it.flag+'</span>'
+        +'<span class="lb-country-lbl">'+it.label+'</span>'
+        +cnt+'</li>';
+    }).join('');
+  }
+
+  function openCC() {
+    ccPop.hidden = false;
+    ccBtn.setAttribute('aria-expanded', 'true');
+    renderCountryList('');
+    ccInput.value = '';
+    setTimeout(function(){ ccInput.focus(); }, 0);
+  }
+  function closeCC() {
+    ccPop.hidden = true;
+    ccBtn.setAttribute('aria-expanded', 'false');
+  }
+
+  ccBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    if (ccPop.hidden) openCC(); else closeCC();
+  });
+  ccInput.addEventListener('input', function() { renderCountryList(this.value); });
+  ccInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') { closeCC(); ccBtn.focus(); }
+    if (e.key === 'Enter') {
+      var first = ccList.querySelector('.lb-country-opt');
+      if (first) window.location.href = buildUrl(first.getAttribute('data-code'));
+    }
+  });
+  ccList.addEventListener('click', function(e) {
+    var opt = e.target.closest('.lb-country-opt');
+    if (!opt) return;
+    window.location.href = buildUrl(opt.getAttribute('data-code'));
+  });
+  document.addEventListener('click', function(e) {
+    if (!ccWrap.contains(e.target)) closeCC();
   });
 }());
 </script>

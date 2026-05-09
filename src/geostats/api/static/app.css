@@ -402,6 +402,45 @@ body {
 .lb-search::placeholder { color: var(--text-muted); }
 .lb-search:focus { border-color: var(--amethyst-dim); }
 
+.lb-country-wrap { position: relative; }
+.lb-country-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 9px;
+  color: var(--text-primary); font-size: 13px; padding: 5px 10px; cursor: pointer;
+  transition: border-color .15s;
+}
+.lb-country-btn:hover { border-color: var(--amethyst-dim); }
+.lb-country-btn[aria-expanded="true"] { border-color: var(--amethyst-dim); }
+.lb-country-cur { display: inline-flex; align-items: center; gap: 6px; }
+.lb-country-caret { color: var(--text-muted); font-size: 11px; }
+.lb-country-pop {
+  position: absolute; top: calc(100% + 4px); left: 0; z-index: 50;
+  width: 240px; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.4);
+}
+.lb-country-input {
+  width: 100%; box-sizing: border-box;
+  background: transparent; border: 1px solid var(--border); border-radius: 7px;
+  color: var(--text-primary); font-size: 13px; padding: 5px 10px; outline: none;
+  margin-bottom: 6px;
+}
+.lb-country-input:focus { border-color: var(--amethyst-dim); }
+.lb-country-list {
+  list-style: none; margin: 0; padding: 0;
+  max-height: 260px; overflow-y: auto;
+}
+.lb-country-opt {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 13px;
+  color: var(--text-primary);
+}
+.lb-country-opt:hover { background: var(--amethyst-dim); }
+.lb-country-opt.active { background: rgba(167,139,250,.18); }
+.lb-country-flag { width: 22px; text-align: center; }
+.lb-country-lbl { flex: 1; }
+.lb-country-cnt { color: var(--text-muted); font-size: 11px; }
+.lb-country-empty { padding: 8px; color: var(--text-muted); font-size: 12px; text-align: center; }
+
 /* ── Chart tooltip ── */
 #chart-tooltip {
   display: none; position: absolute;
