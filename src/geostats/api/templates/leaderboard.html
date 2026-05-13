@@ -215,7 +215,7 @@
     var f = (filter || '').trim().toLowerCase();
     var items = [{code: '', count: null, name: 'Worldwide', flag: '🌎'}];
     countries.forEach(function(c) {
-      items.push({code: c.code, count: c.count, name: ccName(c.code), flag: flag(c.code)});
+      items.push({code: c.code, count: c.count, tracked: c.tracked, name: ccName(c.code), flag: flag(c.code)});
     });
     var matched = items.filter(function(it) {
       if (!f) return true;
@@ -229,7 +229,12 @@
     }
     ccList.innerHTML = matched.map(function(it) {
       var act = it.code === country ? ' active' : '';
-      var cnt = it.count != null ? '<span class="lb-country-cnt">'+it.count+'</span>' : '';
+      var cnt = '';
+      if (it.count != null) {
+        var lbl = (it.tracked != null && it.tracked !== it.count) ? it.count+' / '+it.tracked : String(it.count);
+        var ttl = (it.tracked != null && it.tracked !== it.count) ? ' title="active in this mode / total tracked"' : '';
+        cnt = '<span class="lb-country-cnt"'+ttl+'>'+lbl+'</span>';
+      }
       var esc = it.name.replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});
       return '<li class="lb-country-opt'+act+'" role="option" data-code="'+it.code+'">'
         +'<span class="lb-country-flag">'+it.flag+'</span>'
