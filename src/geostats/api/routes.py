@@ -238,7 +238,8 @@ async def leaderboard(
     countries_q = (
         db.query(
             func.upper(Account.country_code).label("cc"),
-            func.count(Account.id).label("n"),
+            func.count(Account.id).filter(rating_col.isnot(None)).label("active"),
+            func.count(Account.id).label("tracked"),
         )
         .join(
             RatingSnapshot,
@@ -249,13 +250,16 @@ async def leaderboard(
             Account.tracked == True,  # noqa: E712
             Account.last_polled_at.isnot(None),
             Account.country_code.isnot(None),
-            rating_col.isnot(None),
         )
         .group_by(func.upper(Account.country_code))
         .order_by(func.count(Account.id).desc())
         .all()
     )
-    countries = [{"code": r.cc, "count": r.n} for r in countries_q if r.cc]
+    countries = [
+        {"code": r.cc, "count": r.active, "tracked": r.tracked}
+        for r in countries_q
+        if r.cc
+    ]
 
     last_updated: datetime | None = (
         db.query(func.max(RatingSnapshot.captured_at)).scalar()

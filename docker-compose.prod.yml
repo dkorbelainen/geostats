@@ -58,7 +58,7 @@ services:
         while true; do
           geostats poll-top --limit 500;
           if [ $((TICK % 28)) -eq 0 ]; then
-            geostats poll-discover;
+            geostats poll-discover --limit 1000;
             geostats compute-matches;
             geostats compute-anomalies;
           fi;
