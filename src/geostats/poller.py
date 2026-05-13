@@ -20,7 +20,9 @@ def _make_client(ncfa_cookie: str) -> GeoClient:
 log = logging.getLogger(__name__)
 
 
-async def discover_leaderboard(client: GeoClient, limit: int = 100, max_total: int = 200) -> list[str]:
+async def discover_leaderboard(
+    client: GeoClient, limit: int = 100, max_total: int = 1000
+) -> list[str]:
     all_ids: list[str] = []
     offset = 0
     while True:
@@ -150,9 +152,9 @@ async def _run_poll(
                 )
 
 
-async def run_discover(ncfa_cookie: str) -> None:
+async def run_discover(ncfa_cookie: str, max_total: int = 1000) -> None:
     async with _make_client(ncfa_cookie) as client:
-        ids = await discover_leaderboard(client, limit=100)
+        ids = await discover_leaderboard(client, limit=100, max_total=max_total)
     log.info("discovered %d rated players", len(ids))
     new_ids = _upsert_accounts(ids)
     log.info("new accounts added: %d", len(new_ids))

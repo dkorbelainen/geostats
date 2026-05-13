@@ -56,10 +56,17 @@ def poll_top(limit: int) -> None:
 
 
 @cli.command("poll-discover")
-def poll_discover() -> None:
+@click.option(
+    "--limit",
+    default=1000,
+    show_default=True,
+    type=int,
+    help="Max accounts to discover from global leaderboard (top-N by rating)",
+)
+def poll_discover(limit: int) -> None:
     cookie = _require_ncfa()
     from geostats.poller import run_discover  # noqa: PLC0415
-    asyncio.run(run_discover(ncfa_cookie=cookie))
+    asyncio.run(run_discover(ncfa_cookie=cookie, max_total=limit))
 
 
 @cli.command("compute-matches")
