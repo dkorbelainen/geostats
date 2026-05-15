@@ -4,20 +4,18 @@ from dataclasses import dataclass
 from typing import Literal
 
 import numpy as np
-from sklearn.linear_model import Ridge
-from sklearn.preprocessing import StandardScaler
 
 from geostats.models import RatingSnapshot
 from geostats.stats import _FIELD_ATTR
 
 _MIN_POINTS = 5
 _MIN_SPAN_DAYS = 7
-_MIN_SIGMA_DAYS = 3
+_MIN_DAILY_POINTS = 5            # robust slope needs at least this many distinct UTC days
+_MIN_PAIRS_FOR_SLOPE = 2         # at least one pair is required for any slope estimate
+_WINDOW_DAYS = 30                # only the recent window informs the slope
 _MAX_DAILY_DELTA = 150           # hard cap on slope contribution per day
-_RIDGE_ALPHA = 1.0               # light L2 — recency weighting carries most of the regularisation
-_RECENCY_HALF_LIFE_DAYS = 10.0   # exponential decay on sample weights
-_SIGMA_WINDOW_DAYS = 30.0        # only recent volatility informs the interval
-_MAD_TO_SIGMA = 1.4826           # MAD → robust std for Gaussian-ish noise
+_FULL_CREDIBILITY_DAYS = 20      # at >=20 daily points, slope used at full weight
+_PEAK_HEADROOM = 1.08            # forecast can exceed all-time high by at most 8%
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,34 +27,52 @@ class ForecastResult:
     n_points: int
 
 
-def _sigma_daily_mad(
+def _daily_series(
     times: np.ndarray,
     ratings: np.ndarray,
-    window_days: float | None,
-) -> float:
-    """Robust daily-volatility estimate.
+    window_days: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Collapse snapshots to one rating per UTC day within the recent window.
 
-    Collapses snapshots to last-rating-per-UTC-day so intraday polling does
-    not inflate variance, then takes MAD of per-day deltas (gap-normalised).
-    Returns 0.0 if fewer than _MIN_SIGMA_DAYS distinct days are available.
+    Multiple snapshots per day are common (intraday polling) — using all of
+    them lets short bursts dominate the trend. We keep the last rating of
+    each UTC day inside the window.
     """
-    cutoff = times[-1] - window_days * 86400.0 if window_days is not None else -np.inf
-    day_buckets: dict[int, float] = {}
+    cutoff = times[-1] - window_days * 86400.0
+    buckets: dict[int, float] = {}
     for t, r in zip(times, ratings, strict=True):
         if t >= cutoff:
-            day_buckets[int(t // 86400)] = float(r)
-    if len(day_buckets) < _MIN_SIGMA_DAYS:
+            buckets[int(t // 86400)] = float(r)
+    if len(buckets) < _MIN_DAILY_POINTS:
+        # Fall back to whatever we have if the recent window is sparse.
+        buckets = {}
+        for t, r in zip(times, ratings, strict=True):
+            buckets[int(t // 86400)] = float(r)
+    days_sorted = sorted(buckets.keys())
+    return (
+        np.array(days_sorted, dtype=np.float64),
+        np.array([buckets[d] for d in days_sorted], dtype=np.float64),
+    )
+
+
+def _theil_sen_slope(days: np.ndarray, ratings: np.ndarray) -> float:
+    """Median pairwise slope — robust to outlier sessions.
+
+    Unlike OLS/Ridge, a single noisy day shifts the median by at most one
+    pair, so the predicted delta does not swing dramatically as new data
+    arrives.
+    """
+    if days.size < _MIN_PAIRS_FOR_SLOPE:
         return 0.0
-    sorted_days = sorted(day_buckets.keys())
-    days_arr = np.array(sorted_days, dtype=np.float64)
-    ratings_daily = np.array([day_buckets[d] for d in sorted_days], dtype=np.float64)
-    gaps_days = np.diff(days_arr)
-    daily_deltas = np.diff(ratings_daily) / np.maximum(gaps_days, 1.0)
-    if daily_deltas.size < _MIN_SIGMA_DAYS - 1:
+    di = days[:, None]
+    dj = days[None, :]
+    ri = ratings[:, None]
+    rj = ratings[None, :]
+    mask = dj > di
+    if not np.any(mask):
         return 0.0
-    med = float(np.median(daily_deltas))
-    mad = float(np.median(np.abs(daily_deltas - med)))
-    return _MAD_TO_SIGMA * mad
+    slopes = (rj - ri)[mask] / (dj - di)[mask]
+    return float(np.median(slopes))
 
 
 def forecast_rating(
@@ -88,45 +104,30 @@ def forecast_rating(
     if span_days < _MIN_SPAN_DAYS:
         return null
 
-    origin = times[0]
-    X_days = ((times - origin) / 86400.0).reshape(-1, 1)
+    daily_days, daily_ratings = _daily_series(times, ratings, _WINDOW_DAYS)
+    if daily_days.size < _MIN_DAILY_POINTS:
+        return null
 
-    scaler = StandardScaler()
-    X_sc = scaler.fit_transform(X_days)
+    slope_per_day = _theil_sen_slope(daily_days, daily_ratings)
 
-    # Exponential recency weights — recent snapshots dominate the slope.
-    elapsed_days = (times[-1] - times) / 86400.0
-    sample_weight = np.power(0.5, elapsed_days / _RECENCY_HALF_LIFE_DAYS)
+    # Credibility shrinkage: small samples get pulled toward zero so the
+    # prediction does not commit to a slope estimated from a handful of days.
+    credibility = min(1.0, daily_days.size / float(_FULL_CREDIBILITY_DAYS))
+    slope_per_day *= credibility
 
-    model = Ridge(alpha=_RIDGE_ALPHA)
-    model.fit(X_sc, ratings, sample_weight=sample_weight)
-
-    target_days = np.array([[(times[-1] - origin) / 86400.0 + horizon_days]])
-    target_sc = scaler.transform(target_days)
-    predicted_raw = float(model.predict(target_sc)[0])
-    current = float(ratings[-1])
-    max_hist = float(np.max(ratings))
-
-    # Clamp absolute delta so a freak slope can't fly off into orbit.
+    raw_delta = slope_per_day * float(horizon_days)
     max_delta = float(_MAX_DAILY_DELTA * horizon_days)
-    clamped_delta = float(np.clip(predicted_raw - current, -max_delta, max_delta))
+    clamped_delta = float(np.clip(raw_delta, -max_delta, max_delta))
 
-    # Ceiling: 8% above all-time high; floor: 0
-    ceiling = max_hist * 1.08
+    current = float(ratings[-1])
+    ceiling = float(np.max(ratings)) * _PEAK_HEADROOM
     predicted_rating = int(round(float(np.clip(current + clamped_delta, 0.0, ceiling))))
     predicted_delta = predicted_rating - int(round(current))
-
-    # Interval: random-walk style with robust per-day sigma over the recent window.
-    # Fall back to the full history if the recent window is too sparse.
-    sigma_daily = _sigma_daily_mad(times, ratings, _SIGMA_WINDOW_DAYS)
-    if sigma_daily <= 0.0:
-        sigma_daily = _sigma_daily_mad(times, ratings, None)
-    confidence = int(round(sigma_daily * float(np.sqrt(float(horizon_days)))))
 
     return ForecastResult(
         horizon_days=horizon_days,
         predicted_delta=predicted_delta,
         predicted_rating=predicted_rating,
-        confidence=confidence,
+        confidence=None,
         n_points=n,
     )

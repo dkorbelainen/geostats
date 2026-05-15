@@ -245,7 +245,9 @@
           {{ fc.predicted_delta | fmt_delta }}
         </div>
         <div class="fc-rating">→ {{ fc.predicted_rating | fmt_rating }}</div>
+        {% if fc.confidence is not none %}
         <div class="fc-conf">±{{ fc.confidence | fmt_rating }}</div>
+        {% endif %}
         {% else %}
         <div class="fc-empty">Not enough data</div>
         {% endif %}

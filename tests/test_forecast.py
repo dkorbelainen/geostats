@@ -84,11 +84,10 @@ def test_forecast_horizon_days_preserved() -> None:
     assert result.horizon_days == 60
 
 
-def test_forecast_confidence_is_nonnegative() -> None:
+def test_forecast_confidence_is_dropped() -> None:
     snaps = _snaps_rising(10)
     result = forecast_rating(snaps, "overall", 7)
-    assert result.confidence is not None
-    assert result.confidence >= 0
+    assert result.confidence is None
 
 
 def test_forecast_empty_snaps_returns_none_values() -> None:
