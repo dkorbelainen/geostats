@@ -287,7 +287,7 @@ def test_forecast_with_enough_data_returns_prediction(
     assert data["mode"] == "overall"
     assert isinstance(data["predicted_delta"], int)
     assert isinstance(data["predicted_rating"], int)
-    assert isinstance(data["confidence"], int)
+    assert data["confidence"] is None
     assert data["n_points"] == 10
 
 
