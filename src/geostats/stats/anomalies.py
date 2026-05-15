@@ -57,6 +57,12 @@ MIN_BUCKET = 25  # below this, fall back to global IF model
 # peak_rating bucket edges (right-open). 6 buckets total.
 _BUCKET_EDGES: tuple[float, ...] = (1100.0, 1300.0, 1500.0, 1700.0, 1900.0)
 
+# Per-bucket multiplier on the final anomaly confidence.
+# Low-rating tiers are noisy: rule_prior fires on "few games + high rating"
+# even at 1100, and the IF tail is thin. Scale down so flat display threshold
+# of 85 effectively hides bucket 0 and trims bucket 1.
+_BUCKET_CONFIDENCE_WEIGHT: tuple[float, ...] = (0.0, 0.82, 0.95, 1.0, 1.0, 1.0)
+
 CONFIDENCE_DISPLAY_THRESHOLD = 85
 _RNG_SEED = 42
 _N_ESTIMATORS = 200
@@ -321,7 +327,11 @@ def compute_anomalies(db: Session) -> int:
 
     # Noisy-OR fusion: either signal alone can flag, both reinforce.
     combined = 1.0 - (1.0 - if_prob_capped) * (1.0 - rule_prob)
-    confidence = np.clip(combined * 100.0, 0.0, 100.0)
+    bucket_weights = np.array(
+        [_BUCKET_CONFIDENCE_WEIGHT[int(b)] for b in bucket_ids],
+        dtype=np.float64,
+    )
+    confidence = np.clip(combined * bucket_weights * 100.0, 0.0, 100.0)
 
     now = datetime.now(UTC)
     db.execute(text("DELETE FROM account_anomalies"))
