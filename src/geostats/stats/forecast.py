@@ -12,6 +12,7 @@ from geostats.stats import _FIELD_ATTR
 
 _MIN_POINTS = 5
 _MIN_SPAN_DAYS = 7
+_MIN_SIGMA_DAYS = 3  # need >=3 distinct UTC days to estimate sigma_daily
 _MAX_DAILY_DELTA = 150  # hard cap on slope contribution per day
 _RIDGE_ALPHA = 5.0      # L2 — shrinks aggressive slopes; effect scales with 1/n
 
@@ -83,10 +84,20 @@ def forecast_rating(
     predicted_delta = predicted_rating - int(round(current))
 
     # Random-walk model: uncertainty = sigma_daily * sqrt(horizon).
-    # Regression residuals on levels inflate std by sqrt(n) — wrong for ELO-style processes.
-    day_gaps = np.diff(times) / 86400.0
-    daily_deltas = np.diff(ratings) / np.maximum(day_gaps, 0.5)
-    sigma_daily = float(np.std(daily_deltas, ddof=1)) if len(daily_deltas) >= 2 else 0.0
+    # Collapse to last-rating-per-UTC-day first — frequent intraday snapshots
+    # otherwise divide by a 0.5-day floor and inflate daily volatility 2-4x.
+    day_buckets: dict[int, float] = {}
+    for t, r in zip(times, ratings, strict=True):
+        day_buckets[int(t // 86400)] = float(r)
+    if len(day_buckets) >= _MIN_SIGMA_DAYS:
+        sorted_days = sorted(day_buckets.keys())
+        days_arr = np.array(sorted_days, dtype=np.float64)
+        ratings_daily = np.array([day_buckets[d] for d in sorted_days], dtype=np.float64)
+        gaps_days = np.diff(days_arr)
+        daily_deltas = np.diff(ratings_daily) / np.maximum(gaps_days, 1.0)
+        sigma_daily = float(np.std(daily_deltas, ddof=1))
+    else:
+        sigma_daily = 0.0
     confidence = int(round(sigma_daily * float(np.sqrt(float(horizon_days)))))
 
     return ForecastResult(
