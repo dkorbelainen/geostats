@@ -17,6 +17,7 @@ dependencies = [
     "pydantic>=2.6",
     "pydantic-settings>=2.2",
     "python-multipart>=0.0.9",
+    "prometheus-fastapi-instrumentator>=8.0.0",
 ]
 
 [project.optional-dependencies]

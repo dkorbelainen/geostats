@@ -1,5 +1,6 @@
 import logging
 import time
+from collections import defaultdict
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -7,6 +8,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from geostats.db import session_factory
 
@@ -29,6 +31,19 @@ def create_app() -> FastAPI:
         version="1.0.0",
         lifespan=lifespan,
     )
+
+    # Rate limiting: max 60 requests per minute per IP
+    _rate_buckets: dict[str, list[float]] = defaultdict(list)
+
+    @app.middleware("http")
+    async def rate_limit(request: Request, call_next):
+        ip = request.client.host if request.client else "unknown"
+        now = time.time()
+        _rate_buckets[ip] = [t for t in _rate_buckets[ip] if now - t < 60]
+        if len(_rate_buckets[ip]) >= 60:
+            return JSONResponse(status_code=429, content={"error": "Too Many Requests", "status": 429})
+        _rate_buckets[ip].append(now)
+        return await call_next(request)
 
     # Logging
     @app.middleware("http")
@@ -76,4 +91,8 @@ def create_app() -> FastAPI:
     from geostats.api.routes import router  # noqa: PLC0415
 
     app.include_router(router)
+
+    # Metrics: expose /metrics for Prometheus scraping
+    Instrumentator().instrument(app).expose(app)
+
     return app

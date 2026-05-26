@@ -46,8 +46,6 @@ services:
       DATABASE_URL: >-
         postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db/${POSTGRES_DB}
       GEOGUESSR_NCFA_COOKIE: ${GEOGUESSR_NCFA_COOKIE:-}
-    ports:
-      - "127.0.0.1:8000:8000"
     networks:
       - frontend_net
       - backend_net
@@ -56,13 +54,15 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
-    # Health check
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\" 2>/dev/null || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 15s
+    # Horizontal scaling: 2 replicas, Caddy load-balances across them
+    deploy:
+      replicas: 2
 
   poller:
     build: .
@@ -99,6 +99,33 @@ services:
       api:
         condition: service_healthy
 
+  # Metrics: Prometheus scrapes /metrics, Grafana visualises
+  prometheus:
+    image: prom/prometheus:latest
+    logging: *default-logging
+    restart: unless-stopped
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - frontend_net
+    depends_on:
+      api:
+        condition: service_healthy
+
+  grafana:
+    image: grafana/grafana:latest
+    logging: *default-logging
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - frontend_net
+    depends_on:
+      - prometheus
+
 networks:
   frontend_net:
   backend_net:
@@ -107,3 +134,5 @@ volumes:
   db_data:
   caddy_data:
   caddy_config:
+  prometheus_data:
+  grafana_data:
