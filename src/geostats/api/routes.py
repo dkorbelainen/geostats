@@ -8,10 +8,17 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 from geostats.api.deps import get_db, get_geo_client
+from geostats.api.schemas import (
+    ForecastResponse,
+    HealthResponse,
+    SearchResultItem,
+    SeriesPoint,
+    SeriesResponse,
+)
 from geostats.client import GeoClient
 from geostats.models import Account, AccountAnomaly, PlayerMatch, RatingSnapshot
 from geostats.stats.aggregates import summarize_profile
@@ -283,6 +290,20 @@ async def healthz() -> dict[str, str]:
     return {"status": "ok"}
 
 
+# Error handling
+@router.get("/health", response_model=HealthResponse, responses={503: {"description": "Service degraded"}})
+async def health(db: Session = Depends(get_db)) -> HealthResponse:  # noqa: B008
+    try:
+        db.execute(text("SELECT 1"))
+        db_status: str = "ok"
+    except Exception:
+        db_status = "error"
+    overall = "ok" if db_status == "ok" else "degraded"
+    if overall == "degraded":
+        raise HTTPException(status_code=503, detail="Service degraded")
+    return HealthResponse(status=overall, db=db_status)  # type: ignore[arg-type]
+
+
 @router.get("/")
 async def landing(
     request: Request, db: Session = Depends(get_db)  # noqa: B008
@@ -435,11 +456,12 @@ async def profile_page(
     )
 
 
-@router.get("/api/search")
+# Data validation
+@router.get("/api/search", response_model=list[SearchResultItem])
 async def search_accounts(
-    q: str = Query(default=""),
-    mode: Literal["overall", "moving", "nomove", "nmpz"] = Query(default="overall"),
-    country: str | None = Query(default=None),
+    q: str = Query(default="", min_length=0, max_length=64, description="Search query (min 2 chars to return results)"),
+    mode: Literal["overall", "moving", "nomove", "nmpz"] = Query(default="overall", description="Game mode for sorting"),
+    country: str | None = Query(default=None, min_length=2, max_length=2, description="Filter by ISO country code"),
     db: Session = Depends(get_db),  # noqa: B008
 ) -> list[dict[str, object]]:
     if len(q) < 2:
@@ -492,13 +514,13 @@ async def search_accounts(
     ]
 
 
-@router.get("/api/profile/{user_id}/series")
+@router.get("/api/profile/{user_id}/series", response_model=SeriesResponse)
 async def series_api(
     user_id: str,
     db: Session = Depends(get_db),  # noqa: B008
-    mode: Literal["overall", "moving", "nomove", "nmpz"] = Query(default="overall"),
-    range_: Literal["7d", "30d", "90d", "all"] = Query(default="30d", alias="range"),
-) -> dict[str, object]:
+    mode: Literal["overall", "moving", "nomove", "nmpz"] = Query(default="overall", description="Game mode"),
+    range_: Literal["7d", "30d", "90d", "all"] = Query(default="30d", alias="range", description="Time range"),
+) -> SeriesResponse:
     account = db.get(Account, user_id)
     if account is None:
         raise HTTPException(status_code=404, detail="not found")
@@ -509,17 +531,21 @@ async def series_api(
         .order_by(RatingSnapshot.captured_at.asc())
         .all()
     )
-    points = get_series(snaps, mode, range_)
-    return {"mode": mode, "range": range_, "points": points}
+    raw_points = get_series(snaps, mode, range_)
+    return SeriesResponse(
+        mode=mode,
+        range=range_,
+        points=[SeriesPoint(date=date, value=value) for date, value in raw_points],
+    )
 
 
-@router.get("/api/profile/{user_id}/forecast")
+@router.get("/api/profile/{user_id}/forecast", response_model=ForecastResponse)
 async def forecast_api(
     user_id: str,
     db: Session = Depends(get_db),  # noqa: B008
-    mode: Literal["overall", "moving", "nomove", "nmpz"] = Query(default="overall"),
-    horizon: int = Query(default=30, ge=1, le=365),
-) -> dict[str, object]:
+    mode: Literal["overall", "moving", "nomove", "nmpz"] = Query(default="overall", description="Game mode"),
+    horizon: int = Query(default=30, ge=1, le=365, description="Forecast horizon in days"),
+) -> ForecastResponse:
     account = db.get(Account, user_id)
     if account is None:
         raise HTTPException(status_code=404, detail="not found")
@@ -531,11 +557,11 @@ async def forecast_api(
         .all()
     )
     result = forecast_rating(snaps, mode, horizon)
-    return {
-        "horizon": result.horizon_days,
-        "mode": mode,
-        "predicted_delta": result.predicted_delta,
-        "predicted_rating": result.predicted_rating,
-        "confidence": result.confidence,
-        "n_points": result.n_points,
-    }
+    return ForecastResponse(
+        horizon=result.horizon_days,
+        mode=mode,
+        predicted_delta=result.predicted_delta,
+        predicted_rating=result.predicted_rating,
+        confidence=result.confidence,
+        n_points=result.n_points,
+    )
