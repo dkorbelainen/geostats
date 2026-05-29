@@ -45,8 +45,17 @@ services:
     ports:
       - "127.0.0.1:8000:8000"
     depends_on:
+      db:
+        condition: service_healthy
       migrate:
         condition: service_completed_successfully
+    # Health check
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\" 2>/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   poller:
     build: .
@@ -71,6 +80,8 @@ services:
         postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db/${POSTGRES_DB}
       GEOGUESSR_NCFA_COOKIE: ${GEOGUESSR_NCFA_COOKIE}
     depends_on:
+      db:
+        condition: service_healthy
       migrate:
         condition: service_completed_successfully
 
@@ -86,7 +97,8 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
-      - api
+      api:
+        condition: service_healthy
 
 volumes:
   db_data:
