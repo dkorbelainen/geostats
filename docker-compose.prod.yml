@@ -15,6 +15,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - db_data:/var/lib/postgresql/data
+    networks:
+      - backend_net
     healthcheck:
       test: ["CMD-SHELL", "psql -U ${POSTGRES_USER} -d ${POSTGRES_DB} -c 'SELECT 1' > /dev/null 2>&1"]
       interval: 5s
@@ -29,6 +31,8 @@ services:
     environment:
       DATABASE_URL: >-
         postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db/${POSTGRES_DB}
+    networks:
+      - backend_net
     depends_on:
       db:
         condition: service_healthy
@@ -44,6 +48,9 @@ services:
       GEOGUESSR_NCFA_COOKIE: ${GEOGUESSR_NCFA_COOKIE:-}
     ports:
       - "127.0.0.1:8000:8000"
+    networks:
+      - frontend_net
+      - backend_net
     depends_on:
       db:
         condition: service_healthy
@@ -79,6 +86,8 @@ services:
       DATABASE_URL: >-
         postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db/${POSTGRES_DB}
       GEOGUESSR_NCFA_COOKIE: ${GEOGUESSR_NCFA_COOKIE}
+    networks:
+      - backend_net
     depends_on:
       db:
         condition: service_healthy
@@ -96,9 +105,15 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile
       - caddy_data:/data
       - caddy_config:/config
+    networks:
+      - frontend_net
     depends_on:
       api:
         condition: service_healthy
+
+networks:
+  frontend_net:
+  backend_net:
 
 volumes:
   db_data:
