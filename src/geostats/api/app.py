@@ -1,4 +1,5 @@
 import logging
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -28,6 +29,21 @@ def create_app() -> FastAPI:
         version="1.0.0",
         lifespan=lifespan,
     )
+
+    # Logging
+    @app.middleware("http")
+    async def log_request_time(request: Request, call_next):
+        start = time.perf_counter()
+        response = await call_next(request)
+        elapsed = time.perf_counter() - start
+        logger.info(
+            "%s %s %.3fs %d",
+            request.method,
+            request.url.path,
+            elapsed,
+            response.status_code,
+        )
+        return response
 
     # Error handling
     @app.exception_handler(HTTPException)
