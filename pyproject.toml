@@ -18,6 +18,7 @@ dependencies = [
     "pydantic-settings>=2.2",
     "python-multipart>=0.0.9",
     "prometheus-fastapi-instrumentator>=8.0.0",
+    "celery[redis]>=5.6.3",
 ]
 
 [project.optional-dependencies]
@@ -57,7 +58,7 @@ files = ["src"]
 plugins = ["pydantic.mypy", "sqlalchemy.ext.mypy.plugin"]
 
 [[tool.mypy.overrides]]
-module = ["sklearn.*", "scipy.*"]
+module = ["sklearn.*", "scipy.*", "celery.*", "kombu.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

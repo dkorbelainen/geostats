@@ -24,6 +24,20 @@ services:
       retries: 20
       start_period: 10s
 
+  redis:
+    image: redis:7-alpine
+    logging: *default-logging
+    restart: unless-stopped
+    networks:
+      - backend_net
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   migrate:
     build: .
     logging: *default-logging
@@ -46,6 +60,7 @@ services:
       DATABASE_URL: >-
         postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db/${POSTGRES_DB}
       GEOGUESSR_NCFA_COOKIE: ${GEOGUESSR_NCFA_COOKIE:-}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
     networks:
       - frontend_net
       - backend_net
@@ -54,6 +69,8 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+      redis:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\" 2>/dev/null || exit 1"]
       interval: 10s
@@ -99,6 +116,25 @@ services:
       api:
         condition: service_healthy
 
+  celery_worker:
+    build: .
+    logging: *default-logging
+    restart: unless-stopped
+    command: ["celery", "-A", "geostats.worker.celery_app", "worker", "--loglevel=info", "--concurrency=2"]
+    environment:
+      DATABASE_URL: >-
+        postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db/${POSTGRES_DB}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+    networks:
+      - backend_net
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
   # Metrics: Prometheus scrapes /metrics, Grafana visualises
   prometheus:
     image: prom/prometheus:latest
@@ -136,3 +172,4 @@ volumes:
   caddy_config:
   prometheus_data:
   grafana_data:
+  redis_data:
