@@ -29,15 +29,48 @@ Services:
 
 ## Launch
 
+### 1. Configure environment
+
 ```bash
 cp .env.example .env
-# edit .env — set POSTGRES_PASSWORD and GEOGUESSR_NCFA_COOKIE
+```
 
+Edit `.env`:
+
+| Variable | Required | Notes |
+|----------|----------|-------|
+| `POSTGRES_USER` | yes | any username |
+| `POSTGRES_PASSWORD` | yes | set a real password |
+| `POSTGRES_DB` | yes | any db name |
+| `DATABASE_URL` | yes | must match the three vars above |
+| `GEOGUESSR_NCFA_COOKIE` | for poller only | see below |
+
+**Without `GEOGUESSR_NCFA_COOKIE`**: API, DB, and Caddy start normally. The poller (background data collector) will fail to authenticate and won't collect data, but all API endpoints, health checks, and Swagger UI remain functional. Suitable for evaluating the architecture.
+
+**To obtain `GEOGUESSR_NCFA_COOKIE`**: log in to geoguessr.com in a browser → DevTools → Application → Cookies → copy the value of `_ncfa`.
+
+### 2. Start
+
+The full production stack is defined in `docker-compose.prod.yml` (the default `docker-compose.yml` is a minimal dev overlay for local DB only):
+
+```bash
 docker compose -f docker-compose.prod.yml up --build -d
 ```
 
-API available at `http://localhost:8000` (or via Caddy at port 80/443).  
-Interactive docs: `http://localhost:8000/docs`
+Startup order is automatic: `db` → `migrate` → `api` + `poller` → `caddy`. Each step waits for the previous service to pass its healthcheck.
+
+### 3. Verify
+
+```bash
+# all containers running
+docker compose -f docker-compose.prod.yml ps
+
+# API health (checks DB connectivity)
+curl http://localhost:8000/health
+
+# interactive docs
+open http://localhost:8000/docs
+```
 
 ## API Examples
 
