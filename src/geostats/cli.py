@@ -1,5 +1,8 @@
 import asyncio
 import logging
+import random
+import signal
+import time
 
 import click
 
@@ -93,12 +96,65 @@ def rerank() -> None:
 @cli.command("compute-anomalies")
 def compute_anomalies_cmd() -> None:
     """Recompute account anomaly scores for all eligible tracked accounts."""
-    from geostats.db import session_factory as _sf, session_scope  # noqa: PLC0415
+    from geostats.db import session_factory as _sf  # noqa: PLC0415
+    from geostats.db import session_scope  # noqa: PLC0415
     from geostats.stats.anomalies import compute_anomalies  # noqa: PLC0415
     _sf()
     with session_scope() as db:
         n = compute_anomalies(db)
     click.echo(f"computed anomalies for {n} players")
+
+
+# Graceful shutdown
+@cli.command("daemon")
+def daemon_cmd() -> None:
+    """Run the polling loop as a long-lived daemon with clean SIGTERM handling."""
+    _shutdown = False
+
+    def _handle_sigterm(signum: int, frame: object) -> None:
+        nonlocal _shutdown
+        logging.getLogger(__name__).info("SIGTERM received, finishing current cycle then exiting")
+        _shutdown = True
+
+    signal.signal(signal.SIGTERM, _handle_sigterm)
+    signal.signal(signal.SIGINT, _handle_sigterm)
+
+    cookie = _require_ncfa()
+    settings = get_settings()
+    tick = 0
+
+    from geostats.db import session_scope  # noqa: PLC0415
+    from geostats.poller import run_discover, run_new_poll, run_top_poll  # noqa: PLC0415
+    from geostats.ranker import compute_ranks  # noqa: PLC0415
+    from geostats.stats.anomalies import compute_anomalies  # noqa: PLC0415
+    from geostats.stats.doppelganger import compute_matches  # noqa: PLC0415
+
+    log = logging.getLogger(__name__)
+
+    while not _shutdown:
+        log.info("daemon tick=%d start", tick)
+        asyncio.run(run_top_poll(
+            ncfa_cookie=cookie, delay=settings.poll_request_delay_sec, limit=500
+        ))
+        if tick % 28 == 0:
+            asyncio.run(run_discover(ncfa_cookie=cookie, max_total=1000))
+            with session_scope() as db:
+                compute_matches(db)
+                compute_anomalies(db)
+                compute_ranks(db)
+        asyncio.run(run_new_poll(
+            ncfa_cookie=cookie, delay=settings.poll_request_delay_sec, limit=100
+        ))
+        tick += 1
+        if _shutdown:
+            break
+        sleep_sec = 21600 + random.randint(-1200, 1200)
+        log.info("daemon tick=%d done, sleeping %ds", tick - 1, sleep_sec)
+        deadline = time.monotonic() + sleep_sec
+        while not _shutdown and time.monotonic() < deadline:
+            time.sleep(1)
+
+    log.info("daemon exiting cleanly")
 
 
 @cli.command("poll-new")

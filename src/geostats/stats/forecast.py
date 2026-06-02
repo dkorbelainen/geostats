@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+import time
 from dataclasses import dataclass
 from typing import Literal
 
@@ -7,6 +9,8 @@ import numpy as np
 
 from geostats.models import RatingSnapshot
 from geostats.stats import _FIELD_ATTR
+
+logger = logging.getLogger(__name__)
 
 _MIN_POINTS = 5
 _MIN_SPAN_DAYS = 7
@@ -16,6 +20,8 @@ _WINDOW_DAYS = 30                # only the recent window informs the slope
 _MAX_DAILY_DELTA = 150           # hard cap on slope contribution per day
 _FULL_CREDIBILITY_DAYS = 20      # at >=20 daily points, slope used at full weight
 _PEAK_HEADROOM = 1.08            # forecast can exceed all-time high by at most 8%
+# Resource management: cap input size so aggregation stays O(1) in memory/CPU
+_MAX_POINTS = 365
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,12 +86,15 @@ def forecast_rating(
     field: Literal["overall", "moving", "nomove", "nmpz"],
     horizon_days: int,
 ) -> ForecastResult:
+    _t0 = time.perf_counter()
     attr = _FIELD_ATTR[field]
     pairs = [
         (s.captured_at.timestamp(), int(getattr(s, attr)))
         for s in snaps
         if getattr(s, attr) is not None
     ]
+    if len(pairs) > _MAX_POINTS:
+        pairs = pairs[-_MAX_POINTS:]
     n = len(pairs)
     null = ForecastResult(
         horizon_days=horizon_days,
@@ -95,6 +104,7 @@ def forecast_rating(
         n_points=n,
     )
     if n < _MIN_POINTS:
+        logger.debug("forecast skipped: n=%d < min=%d elapsed=%.3fs", n, _MIN_POINTS, time.perf_counter() - _t0)
         return null
 
     times = np.array([p[0] for p in pairs], dtype=np.float64)
@@ -102,10 +112,12 @@ def forecast_rating(
 
     span_days = (times[-1] - times[0]) / 86400.0
     if span_days < _MIN_SPAN_DAYS:
+        logger.debug("forecast skipped: span=%.1fd < min=%dd elapsed=%.3fs", span_days, _MIN_SPAN_DAYS, time.perf_counter() - _t0)
         return null
 
     daily_days, daily_ratings = _daily_series(times, ratings, _WINDOW_DAYS)
     if daily_days.size < _MIN_DAILY_POINTS:
+        logger.debug("forecast skipped: daily_points=%d < min=%d elapsed=%.3fs", daily_days.size, _MIN_DAILY_POINTS, time.perf_counter() - _t0)
         return null
 
     slope_per_day = _theil_sen_slope(daily_days, daily_ratings)
@@ -124,10 +136,12 @@ def forecast_rating(
     predicted_rating = int(round(float(np.clip(current + clamped_delta, 0.0, ceiling))))
     predicted_delta = predicted_rating - int(round(current))
 
-    return ForecastResult(
+    result = ForecastResult(
         horizon_days=horizon_days,
         predicted_delta=predicted_delta,
         predicted_rating=predicted_rating,
         confidence=None,
         n_points=n,
     )
+    logger.debug("forecast field=%s horizon=%d n=%d elapsed=%.3fs", field, horizon_days, n, time.perf_counter() - _t0)
+    return result

@@ -16,5 +16,6 @@ RUN uv pip install --no-deps .
 ENV PATH="/app/.venv/bin:$PATH"
 
 EXPOSE 8000
+# Graceful shutdown: uvicorn waits up to 30s for in-flight requests on SIGTERM
 CMD ["uvicorn", "geostats.api.app:create_app", "--factory", \
-     "--host", "0.0.0.0", "--port", "8000"]
+     "--host", "0.0.0.0", "--port", "8000", "--timeout-graceful-shutdown", "30"]
