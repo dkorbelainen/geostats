@@ -68,20 +68,8 @@ services:
     build: .
     logging: *default-logging
     restart: unless-stopped
-    command: >
-      sh -c "
-        TICK=0;
-        while true; do
-          geostats poll-top --limit 500;
-          if [ $((TICK % 28)) -eq 0 ]; then
-            geostats poll-discover --limit 1000;
-            geostats compute-matches;
-            geostats compute-anomalies;
-          fi;
-          geostats poll-new --limit 100;
-          TICK=$((TICK + 1));
-          sleep $((21600 + RANDOM % 2400 - 1200));
-        done"
+    command: ["geostats", "daemon"]
+    stop_grace_period: 60s
     environment:
       DATABASE_URL: >-
         postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db/${POSTGRES_DB}
