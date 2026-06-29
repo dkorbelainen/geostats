@@ -4,6 +4,10 @@ x-logging: &default-logging
     max-size: "10m"
     max-file: "3"
 
+x-app-env: &app-env
+  DATABASE_URL: >-
+    postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db/${POSTGRES_DB}
+
 services:
   db:
     image: postgres:16-alpine
@@ -40,11 +44,11 @@ services:
 
   migrate:
     build: .
+    image: geostats:latest
     logging: *default-logging
     command: alembic upgrade head
     environment:
-      DATABASE_URL: >-
-        postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db/${POSTGRES_DB}
+      <<: *app-env
     networks:
       - backend_net
     depends_on:
@@ -53,12 +57,11 @@ services:
     restart: on-failure
 
   api:
-    build: .
+    image: geostats:latest
     logging: *default-logging
     restart: unless-stopped
     environment:
-      DATABASE_URL: >-
-        postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db/${POSTGRES_DB}
+      <<: *app-env
       GEOGUESSR_NCFA_COOKIE: ${GEOGUESSR_NCFA_COOKIE:-}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
     networks:
@@ -82,14 +85,13 @@ services:
       replicas: 2
 
   poller:
-    build: .
+    image: geostats:latest
     logging: *default-logging
     restart: unless-stopped
     command: ["geostats", "daemon"]
     stop_grace_period: 60s
     environment:
-      DATABASE_URL: >-
-        postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db/${POSTGRES_DB}
+      <<: *app-env
       GEOGUESSR_NCFA_COOKIE: ${GEOGUESSR_NCFA_COOKIE}
     networks:
       - backend_net
@@ -117,13 +119,12 @@ services:
         condition: service_healthy
 
   celery_worker:
-    build: .
+    image: geostats:latest
     logging: *default-logging
     restart: unless-stopped
     command: ["celery", "-A", "geostats.worker.celery_app", "worker", "--loglevel=info", "--concurrency=2"]
     environment:
-      DATABASE_URL: >-
-        postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db/${POSTGRES_DB}
+      <<: *app-env
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
     networks:
       - backend_net
@@ -135,13 +136,11 @@ services:
       redis:
         condition: service_healthy
 
-  # Metrics: disabled on VPS (insufficient disk space for grafana:latest ~380MB)
+  # Metrics: disabled. grafana:latest ~380MB)
   # prometheus:
   #   image: prom/prometheus:latest
-  #   ...
   # grafana:
   #   image: grafana/grafana:latest
-  #   ...
 
 networks:
   frontend_net:
