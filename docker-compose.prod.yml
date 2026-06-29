@@ -135,32 +135,13 @@ services:
       redis:
         condition: service_healthy
 
-  # Metrics: Prometheus scrapes /metrics, Grafana visualises
-  prometheus:
-    image: prom/prometheus:latest
-    logging: *default-logging
-    restart: unless-stopped
-    volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus_data:/prometheus
-    networks:
-      - frontend_net
-    depends_on:
-      api:
-        condition: service_healthy
-
-  grafana:
-    image: grafana/grafana:latest
-    logging: *default-logging
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:3000:3000"
-    volumes:
-      - grafana_data:/var/lib/grafana
-    networks:
-      - frontend_net
-    depends_on:
-      - prometheus
+  # Metrics: disabled on VPS (insufficient disk space for grafana:latest ~380MB)
+  # prometheus:
+  #   image: prom/prometheus:latest
+  #   ...
+  # grafana:
+  #   image: grafana/grafana:latest
+  #   ...
 
 networks:
   frontend_net:
@@ -170,6 +151,4 @@ volumes:
   db_data:
   caddy_data:
   caddy_config:
-  prometheus_data:
-  grafana_data:
   redis_data:
