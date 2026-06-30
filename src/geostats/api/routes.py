@@ -23,8 +23,6 @@ from geostats.api.schemas import (
     TaskStatus,
     TaskSubmitted,
 )
-from geostats.worker.celery_app import celery_app
-from geostats.worker.tasks import compute_forecast
 from geostats.client import GeoClient
 from geostats.models import Account, AccountAnomaly, PlayerMatch, RatingSnapshot
 from geostats.stats.aggregates import summarize_profile
@@ -584,6 +582,7 @@ async def forecast_async(
     account = db.get(Account, user_id)
     if account is None:
         raise HTTPException(status_code=404, detail="not found")
+    from geostats.worker.tasks import compute_forecast  # noqa: PLC0415
     task = compute_forecast.delay(user_id, mode, horizon)
     return TaskSubmitted(task_id=task.id, status="pending")
 
@@ -591,6 +590,7 @@ async def forecast_async(
 # Polling: check task status by task_id
 @router.get("/api/tasks/{task_id}", response_model=TaskStatus)
 async def task_status_poll(task_id: str) -> TaskStatus:
+    from geostats.worker.celery_app import celery_app  # noqa: PLC0415
     result: AsyncResult[dict[str, object]] = AsyncResult(task_id, app=celery_app)
     if result.state == "SUCCESS":
         return TaskStatus(task_id=task_id, status="success", result=result.get())
@@ -603,6 +603,7 @@ async def task_status_poll(task_id: str) -> TaskStatus:
 @router.websocket("/api/tasks/{task_id}/ws")
 async def task_status_ws(task_id: str, websocket: WebSocket) -> None:
     await websocket.accept()
+    from geostats.worker.celery_app import celery_app  # noqa: PLC0415
     while True:
         result: AsyncResult[dict[str, object]] = AsyncResult(task_id, app=celery_app)
         if result.state == "SUCCESS":
