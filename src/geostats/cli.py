@@ -89,8 +89,9 @@ def rerank() -> None:
     session_factory()
     from geostats.db import session_scope  # noqa: PLC0415
     from geostats.ranker import compute_ranks  # noqa: PLC0415
+    settings = get_settings()
     with session_scope() as db:
-        compute_ranks(db)
+        compute_ranks(db, settings.rating_system_cutoff)
     click.echo("ranks recomputed")
     
 @cli.command("compute-anomalies")
@@ -139,9 +140,9 @@ def daemon_cmd() -> None:
         if tick % 28 == 0:
             asyncio.run(run_discover(ncfa_cookie=cookie, max_total=1000))
             with session_scope() as db:
-                compute_matches(db)
-                compute_anomalies(db)
-                compute_ranks(db)
+                compute_matches(db, settings.rating_system_cutoff)
+                compute_anomalies(db, settings.rating_system_cutoff)
+                compute_ranks(db, settings.rating_system_cutoff)
         asyncio.run(run_new_poll(
             ncfa_cookie=cookie, delay=settings.poll_request_delay_sec, limit=100
         ))
