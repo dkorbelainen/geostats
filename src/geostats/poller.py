@@ -161,8 +161,10 @@ async def run_discover(ncfa_cookie: str, max_total: int = 1000) -> None:
 
 
 async def run_full_poll(ncfa_cookie: str, delay: float) -> None:
+    from geostats.config import get_settings  # noqa: PLC0415
     from geostats.ranker import compute_ranks  # noqa: PLC0415
 
+    settings = get_settings()
     async with _make_client(ncfa_cookie) as client:
         ids = await discover_leaderboard(client, limit=100)
         log.info("discovered %d rated players", len(ids))
@@ -178,13 +180,15 @@ async def run_full_poll(ncfa_cookie: str, delay: float) -> None:
         await _run_poll(client, unique_ids, delay, new_ids | no_pin)
 
     with session_scope() as db:
-        compute_ranks(db)
+        compute_ranks(db, settings.rating_system_cutoff)
     log.info("ranks computed")
 
 
 async def run_new_poll(ncfa_cookie: str, delay: float, limit: int | None = None) -> None:
+    from geostats.config import get_settings  # noqa: PLC0415
     from geostats.ranker import compute_ranks  # noqa: PLC0415
 
+    settings = get_settings()
     with session_scope() as db:
         q = (
             db.query(Account.id)
@@ -204,7 +208,7 @@ async def run_new_poll(ncfa_cookie: str, delay: float, limit: int | None = None)
         await _run_poll(client, new_ids, delay, set(new_ids))  # all new → fetch info
 
     with session_scope() as db:
-        compute_ranks(db)
+        compute_ranks(db, settings.rating_system_cutoff)
     log.info("new accounts polled and ranks computed")
 
 
@@ -214,8 +218,10 @@ _MAIN_RATING_THRESHOLD = 800
 
 
 async def run_top_poll(ncfa_cookie: str, delay: float, limit: int) -> None:  # noqa: ARG001
+    from geostats.config import get_settings  # noqa: PLC0415
     from geostats.ranker import compute_ranks  # noqa: PLC0415
 
+    settings = get_settings()
     with session_scope() as db:
         ordered_rows = (
             db.query(Account.id, Account.last_polled_at)
@@ -265,16 +271,16 @@ async def run_top_poll(ncfa_cookie: str, delay: float, limit: int) -> None:  # n
         await _run_poll(client, new_ids, delay, set(new_ids), min_gap=timedelta(0))
         if new_ids:
             with session_scope() as db:
-                compute_ranks(db)
+                compute_ranks(db, settings.rating_system_cutoff)
             log.info("ranks computed after new pass")
         # Pass 2: main tier — once per day
         await _run_poll(client, main_ids, delay, no_pin, min_gap=_DAILY_GAP)
         with session_scope() as db:
-            compute_ranks(db)
+            compute_ranks(db, settings.rating_system_cutoff)
         log.info("ranks computed after main pass")
         # Pass 3: filler — low rating outliers, slower cadence
         await _run_poll(client, filler_ids, delay, no_pin, min_gap=_FILLER_GAP)
 
     with session_scope() as db:
-        compute_ranks(db)
+        compute_ranks(db, settings.rating_system_cutoff)
     log.info("ranks computed")
