@@ -1,12 +1,10 @@
-import asyncio
 import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 from urllib.parse import quote as _url_quote
 
-from celery.result import AsyncResult
-from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, WebSocket
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup
@@ -20,8 +18,6 @@ from geostats.api.schemas import (
     SearchResultItem,
     SeriesPoint,
     SeriesResponse,
-    TaskStatus,
-    TaskSubmitted,
 )
 from geostats.client import GeoClient
 from geostats.models import Account, AccountAnomaly, PlayerMatch, RatingSnapshot
@@ -569,49 +565,3 @@ async def forecast_api(
         confidence=result.confidence,
         n_points=result.n_points,
     )
-
-
-# Async queue: submit forecast as a Celery task, return task_id immediately
-@router.post("/api/profile/{user_id}/forecast/async", response_model=TaskSubmitted)
-async def forecast_async(
-    user_id: str,
-    db: Session = Depends(get_db),  # noqa: B008
-    mode: Literal["overall", "moving", "nomove", "nmpz"] = Query(default="overall"),
-    horizon: int = Query(default=30, ge=1, le=365),
-) -> TaskSubmitted:
-    account = db.get(Account, user_id)
-    if account is None:
-        raise HTTPException(status_code=404, detail="not found")
-    from geostats.worker.tasks import compute_forecast  # noqa: PLC0415
-    task = compute_forecast.delay(user_id, mode, horizon)
-    return TaskSubmitted(task_id=task.id, status="pending")
-
-
-# Polling: check task status by task_id
-@router.get("/api/tasks/{task_id}", response_model=TaskStatus)
-async def task_status_poll(task_id: str) -> TaskStatus:
-    from geostats.worker.celery_app import celery_app  # noqa: PLC0415
-    result: AsyncResult[dict[str, object]] = AsyncResult(task_id, app=celery_app)
-    if result.state == "SUCCESS":
-        return TaskStatus(task_id=task_id, status="success", result=result.get())
-    if result.state == "FAILURE":
-        return TaskStatus(task_id=task_id, status="failure", error=str(result.result))
-    return TaskStatus(task_id=task_id, status=result.state.lower())
-
-
-# WebSocket: push task status update when task completes
-@router.websocket("/api/tasks/{task_id}/ws")
-async def task_status_ws(task_id: str, websocket: WebSocket) -> None:
-    await websocket.accept()
-    from geostats.worker.celery_app import celery_app  # noqa: PLC0415
-    while True:
-        result: AsyncResult[dict[str, object]] = AsyncResult(task_id, app=celery_app)
-        if result.state == "SUCCESS":
-            await websocket.send_json({"task_id": task_id, "status": "success", "result": result.get()})
-            break
-        if result.state == "FAILURE":
-            await websocket.send_json({"task_id": task_id, "status": "failure", "error": str(result.result)})
-            break
-        await websocket.send_json({"task_id": task_id, "status": "pending"})
-        await asyncio.sleep(0.5)
-    await websocket.close()

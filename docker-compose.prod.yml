@@ -32,20 +32,6 @@ services:
       retries: 20
       start_period: 10s
 
-  redis:
-    image: redis:7-alpine
-    logging: *default-logging
-    restart: unless-stopped
-    networks:
-      - backend_net
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
   migrate:
     <<: *app
     logging: *default-logging
@@ -66,7 +52,6 @@ services:
     environment:
       <<: *app-env
       GEOGUESSR_NCFA_COOKIE: ${GEOGUESSR_NCFA_COOKIE:-}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
     networks:
       - frontend_net
       - backend_net
@@ -75,8 +60,6 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
-      redis:
-        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')\" 2>/dev/null || exit 1"]
       interval: 15s
@@ -118,24 +101,6 @@ services:
       api:
         condition: service_started
 
-  celery_worker:
-    <<: *app
-    logging: *default-logging
-    restart: unless-stopped
-    command: ["celery", "-A", "geostats.worker.celery_app", "worker", "--loglevel=info", "--concurrency=2"]
-    environment:
-      <<: *app-env
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-    networks:
-      - backend_net
-    depends_on:
-      db:
-        condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
-      redis:
-        condition: service_healthy
-
   # Metrics: disabled (grafana:latest ~380MB)
   # prometheus:
   #   image: prom/prometheus:latest
@@ -150,4 +115,3 @@ volumes:
   db_data:
   caddy_data:
   caddy_config:
-  redis_data:

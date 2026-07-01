@@ -137,15 +137,3 @@ class ErrorResponse(BaseModel):
         ..., description="Human-readable error message", examples=["Not found"]
     )
     status: int = Field(..., ge=100, le=599, description="HTTP status code", examples=[404])
-
-
-class TaskSubmitted(BaseModel):
-    task_id: str = Field(..., description="Celery task ID")
-    status: Literal["pending"] = Field("pending", description="Initial task status")
-
-
-class TaskStatus(BaseModel):
-    task_id: str = Field(..., description="Celery task ID")
-    status: str = Field(..., description="Task state: pending, success, failure")
-    result: dict[str, object] | None = Field(None, description="Task result when successful")
-    error: str | None = Field(None, description="Error message when failed")
