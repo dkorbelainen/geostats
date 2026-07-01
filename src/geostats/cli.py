@@ -101,8 +101,9 @@ def compute_anomalies_cmd() -> None:
     from geostats.db import session_scope  # noqa: PLC0415
     from geostats.stats.anomalies import compute_anomalies  # noqa: PLC0415
     _sf()
+    settings = get_settings()
     with session_scope() as db:
-        n = compute_anomalies(db)
+        n = compute_anomalies(db, settings.rating_system_cutoff)
     click.echo(f"computed anomalies for {n} players")
 
 

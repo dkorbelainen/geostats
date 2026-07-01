@@ -17,6 +17,8 @@ from geostats.stats.anomalies import (
     compute_anomalies,
 )
 
+_OLD_CUTOFF = datetime(2020, 1, 1, tzinfo=UTC)
+
 
 def test_account_anomaly_persists(db: Session) -> None:
     db.add(Account(id="a1", nick="A1", created_at=datetime.now(UTC)))
@@ -96,7 +98,7 @@ def test_load_features_filters_low_volume(db: Session) -> None:
     )
     db.commit()
 
-    rows = _load_features(db)
+    rows = _load_features(db, _OLD_CUTOFF)
     assert [r.account_id for r in rows] == ["hi"]
     assert rows[0].vector.shape == (len(FEATURES),)
 
@@ -118,7 +120,7 @@ def test_load_features_aggregates_history(db: Session) -> None:
     )
     db.commit()
 
-    rows = _load_features(db)
+    rows = _load_features(db, _OLD_CUTOFF)
     assert len(rows) == 1
     feats = dict(zip(FEATURES, rows[0].vector, strict=True))
     assert feats["peak_rating"] == 2000.0
@@ -131,6 +133,23 @@ def test_load_features_aggregates_history(db: Session) -> None:
     assert abs(feats["rating_efficiency"] - 2000.0 / log_g) < 1e-6
     assert abs(feats["streak_efficiency"] - 7.0 / log_g) < 1e-6
     assert abs(feats["rating_volatility"] - np.std([1800.0, 2000.0], ddof=1)) < 1e-6
+
+
+def test_load_features_excludes_pre_cutoff_snapshots(db: Session) -> None:
+    now = datetime.now(UTC)
+    cutoff = now - timedelta(days=1)
+    old = cutoff - timedelta(days=10)
+    db.add(Account(id="old", nick="old", created_at=now))
+    db.flush()
+    _seed_snapshot(
+        db, "old", old, rating=5000, win_streak=20,
+        guessed_first_rate=0.9, games_played=1000, games_won=900,
+        avg_guess_distance_km=10.0,
+    )
+    db.commit()
+
+    rows = _load_features(db, cutoff)
+    assert rows == []
 
 
 def _seed_typical(db: Session, account_id: str, *, rating: int, streak: int,
@@ -153,7 +172,7 @@ def test_compute_anomalies_skips_when_population_too_small(db: Session) -> None:
         )
     db.commit()
 
-    n = compute_anomalies(db)
+    n = compute_anomalies(db, _OLD_CUTOFF)
     assert n == 0
     assert db.query(AccountAnomaly).count() == 0
 
@@ -171,7 +190,7 @@ def test_compute_anomalies_writes_rows_and_finds_outlier(db: Session) -> None:
     )
     db.commit()
 
-    n = compute_anomalies(db)
+    n = compute_anomalies(db, _OLD_CUTOFF)
     assert n == MIN_POPULATION + 1
 
     rows = {r.account_id: r for r in db.query(AccountAnomaly).all()}
@@ -206,7 +225,7 @@ def test_suspicious_low_games_high_rating_scores_above_legit(db: Session) -> Non
     )
     db.commit()
 
-    compute_anomalies(db)
+    compute_anomalies(db, _OLD_CUTOFF)
 
     rows = {r.account_id: r for r in db.query(AccountAnomaly).all()}
     assert rows["suspicious"].confidence_pct > rows["legit_top"].confidence_pct
@@ -220,17 +239,18 @@ def test_compute_anomalies_replaces_previous_results(db: Session) -> None:
         )
     db.commit()
 
-    compute_anomalies(db)
+    compute_anomalies(db, _OLD_CUTOFF)
     first_ts = db.query(AccountAnomaly.computed_at).first()
     assert first_ts is not None
 
-    n2 = compute_anomalies(db)
+    n2 = compute_anomalies(db, _OLD_CUTOFF)
     assert n2 == MIN_POPULATION + 1
     assert db.query(AccountAnomaly).count() == n2
 
 
 def test_compute_anomalies_cli_smoke(monkeypatch, db: Session) -> None:
     from contextlib import contextmanager
+    from types import SimpleNamespace
 
     @contextmanager
     def fake_scope():
@@ -238,6 +258,10 @@ def test_compute_anomalies_cli_smoke(monkeypatch, db: Session) -> None:
 
     monkeypatch.setattr("geostats.db.session_factory", lambda: None)
     monkeypatch.setattr("geostats.db.session_scope", fake_scope)
+    monkeypatch.setattr(
+        "geostats.cli.get_settings",
+        lambda: SimpleNamespace(rating_system_cutoff=_OLD_CUTOFF),
+    )
 
     for i in range(MIN_POPULATION + 1):
         _seed_typical(

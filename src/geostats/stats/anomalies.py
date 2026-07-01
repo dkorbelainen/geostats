@@ -75,12 +75,13 @@ class _Row:
     raw: dict[str, float]  # raw values for rule-based scoring
 
 
-def _load_features(db: Session) -> list[_Row]:
+def _load_features(db: Session, cutoff: datetime) -> list[_Row]:
     """Aggregate per-account features.
 
     Filters to tracked accounts whose latest snapshot has games_played >=
-    MIN_GAMES_PLAYED. Drops accounts where any required feature is null.
-    Missing account_level is median-imputed across the surviving population.
+    MIN_GAMES_PLAYED, restricted to snapshots captured on/after cutoff.
+    Drops accounts where any required feature is null. Missing
+    account_level is median-imputed across the surviving population.
     """
     sql = text("""
         WITH agg AS (
@@ -94,26 +95,26 @@ def _load_features(db: Session) -> list[_Row]:
                 AVG(rs.avg_guess_distance_km)::float AS mean_avg_guess_distance_km
             FROM rating_snapshots rs
             JOIN accounts a ON a.id = rs.account_id
-            WHERE a.tracked = true AND rs.rating IS NOT NULL
+            WHERE a.tracked = true AND rs.rating IS NOT NULL AND rs.captured_at >= :cutoff
             GROUP BY rs.account_id
         ),
         first_rating AS (
             SELECT DISTINCT ON (account_id) account_id, rating AS first_rating
             FROM rating_snapshots
-            WHERE rating IS NOT NULL
+            WHERE rating IS NOT NULL AND captured_at >= :cutoff
             ORDER BY account_id, captured_at ASC
         ),
         last_rating AS (
             SELECT DISTINCT ON (account_id) account_id, rating AS last_rating
             FROM rating_snapshots
-            WHERE rating IS NOT NULL
+            WHERE rating IS NOT NULL AND captured_at >= :cutoff
             ORDER BY account_id, captured_at DESC
         ),
         latest AS (
             SELECT DISTINCT ON (account_id)
                 account_id, games_played, games_won
             FROM rating_snapshots
-            WHERE games_played IS NOT NULL
+            WHERE games_played IS NOT NULL AND captured_at >= :cutoff
             ORDER BY account_id, captured_at DESC
         )
         SELECT
@@ -138,7 +139,7 @@ def _load_features(db: Session) -> list[_Row]:
 
     pending: list[tuple[str, dict[str, float], int | None]] = []
     levels_seen: list[float] = []
-    for r in db.execute(sql, {"min_games": MIN_GAMES_PLAYED}).fetchall():
+    for r in db.execute(sql, {"min_games": MIN_GAMES_PLAYED, "cutoff": cutoff}).fetchall():
         if (
             r.peak_rating is None
             or r.mean_rating is None
@@ -280,8 +281,8 @@ def _top_drivers(z_row: np.ndarray, k: int = 2) -> list[tuple[str, float]]:
     return [(FEATURES[int(i)], float(z_row[int(i)])) for i in order]
 
 
-def compute_anomalies(db: Session) -> int:
-    rows = _load_features(db)
+def compute_anomalies(db: Session, cutoff: datetime) -> int:
+    rows = _load_features(db, cutoff)
     if len(rows) < MIN_POPULATION:
         log.warning(
             "anomalies: population too small (%d < %d), skipping",
