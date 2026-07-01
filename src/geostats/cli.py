@@ -78,8 +78,9 @@ def compute_matches_cmd() -> None:
     session_factory()
     from geostats.db import session_scope  # noqa: PLC0415
     from geostats.stats.doppelganger import compute_matches  # noqa: PLC0415
+    settings = get_settings()
     with session_scope() as db:
-        n = compute_matches(db)
+        n = compute_matches(db, settings.rating_system_cutoff)
     click.echo(f"computed matches for {n} players")
 
 

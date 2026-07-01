@@ -74,7 +74,7 @@ def test_compute_matches_writes_rows(db: Session):
     _seed_account(db, id_="d", nick="D", country="DE", rating=1490, dist=295, played=210, won=85)
     db.commit()
 
-    n = compute_matches(db)
+    n = compute_matches(db, _OLD_CUTOFF)
     assert n == 4
 
     matches = {m.account_id: m for m in db.query(PlayerMatch).all()}
@@ -98,8 +98,38 @@ def test_compute_matches_country_alone_is_null(db: Session):
     _seed_account(db, id_="c", nick="C", country="JP", rating=2000, dist=200, played=300, won=180)
     db.commit()
 
-    compute_matches(db)
+    compute_matches(db, _OLD_CUTOFF)
     m = db.query(PlayerMatch).filter_by(account_id="c").one()
     assert m.country_match_id is None
     assert m.country_similarity is None
     assert m.global_match_id in {"a", "b"}
+
+
+_OLD_CUTOFF = datetime(2020, 1, 1, tzinfo=UTC)
+
+
+def test_compute_matches_excludes_pre_cutoff_accounts(db: Session):
+    now = datetime.now(UTC)
+    cutoff = now - timedelta(days=1)
+    old = cutoff - timedelta(days=10)
+
+    _seed_account(db, id_="a", nick="A", country="US", rating=2500, dist=100, played=500, won=300)
+    _seed_account(db, id_="b", nick="B", country="US", rating=2510, dist=102, played=510, won=305)
+    # pre-cutoff only: nearly identical profile to "a", would otherwise be its closest match
+    db.add(Account(id="old", nick="Old", country_code="US", created_at=now))
+    db.add(RatingSnapshot(
+        account_id="old", captured_at=old,
+        rating=2505, division_number=None, division_name=None,
+        rating_moving=2505, rating_nomove=2505, rating_nmpz=2505,
+        win_streak=None, guessed_first_rate=0.5,
+        games_played=505, games_won=302, avg_guess_distance_km=101,
+        position_overall=None, position_moving=None, position_nomove=None,
+        position_nmpz=None, position_country=None,
+    ))
+    db.commit()
+
+    n = compute_matches(db, cutoff)
+    assert n == 2  # noqa: PLR2004
+    matches = {m.account_id: m for m in db.query(PlayerMatch).all()}
+    assert "old" not in matches
+    assert matches["a"].global_match_id == "b"
