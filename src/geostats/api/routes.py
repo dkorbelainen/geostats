@@ -11,7 +11,7 @@ from markupsafe import Markup
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
-from geostats.api.deps import get_db, get_geo_client
+from geostats.api.deps import get_db, get_geo_client, get_rating_cutoff
 from geostats.api.schemas import (
     ForecastResponse,
     HealthResponse,
@@ -210,6 +210,8 @@ async def leaderboard(
     mode: Literal["overall", "moving", "nomove", "nmpz"] = Query(default="overall"),
     limit: int = Query(default=100, ge=1),
     country: str | None = Query(default=None),
+    era: Literal["current", "legacy"] = Query(default="current"),
+    cutoff: datetime = Depends(get_rating_cutoff),  # noqa: B008
     db: Session = Depends(get_db),  # noqa: B008
 ) -> Response:
     if limit not in _LB_VALID_LIMITS:
@@ -218,9 +220,14 @@ async def leaderboard(
     if cc is not None and (len(cc) != _CC_LEN or not cc.isalpha()):
         cc = None
     rating_col, pos_col = _LB_MODE_FIELDS[mode]
+    era_filter = (
+        RatingSnapshot.captured_at >= cutoff
+        if era == "current"
+        else RatingSnapshot.captured_at < cutoff
+    )
     latest_snap_sq = (
         db.query(func.max(RatingSnapshot.captured_at))
-        .filter(RatingSnapshot.account_id == Account.id)
+        .filter(RatingSnapshot.account_id == Account.id, era_filter)
         .correlate(Account)
         .scalar_subquery()
     )
@@ -268,7 +275,7 @@ async def leaderboard(
     ]
 
     last_updated: datetime | None = (
-        db.query(func.max(RatingSnapshot.captured_at)).scalar()
+        db.query(func.max(RatingSnapshot.captured_at)).filter(era_filter).scalar()
     )
     return templates.TemplateResponse(
         request,
@@ -280,6 +287,7 @@ async def leaderboard(
             "country": cc,
             "countries": countries,
             "last_updated": last_updated,
+            "era": era,
         },
     )
 
@@ -371,6 +379,8 @@ async def profile_page(
     profile_ref: str,
     request: Request,
     forecast: int = Query(default=30, ge=1, le=365),
+    era: Literal["current", "legacy"] = Query(default="current"),
+    cutoff: datetime = Depends(get_rating_cutoff),  # noqa: B008
     db: Session = Depends(get_db),  # noqa: B008
 ) -> Response:
     if len(profile_ref) > 100:
@@ -391,7 +401,7 @@ async def profile_page(
         return templates.TemplateResponse(
             request,
             "profile.html",
-            {"account": account, "collecting": True},
+            {"account": account, "collecting": True, "era_empty": False, "era": era},
         )
 
     snaps: list[RatingSnapshot] = (
@@ -400,15 +410,31 @@ async def profile_page(
         .order_by(RatingSnapshot.captured_at.asc())
         .all()
     )
+    era_snaps = (
+        [s for s in snaps if s.captured_at >= cutoff]
+        if era == "current"
+        else [s for s in snaps if s.captured_at < cutoff]
+    )
+
+    if not era_snaps:
+        return templates.TemplateResponse(
+            request,
+            "profile.html",
+            {"account": account, "collecting": False, "era_empty": True, "era": era},
+        )
 
     total_tracked: int = (
-        db.query(func.count(Account.id))
-        .filter(Account.last_polled_at.isnot(None))
+        db.query(func.count(func.distinct(RatingSnapshot.account_id)))
+        .filter(
+            RatingSnapshot.captured_at >= cutoff
+            if era == "current"
+            else RatingSnapshot.captured_at < cutoff
+        )
         .scalar()
         or 0
     )
 
-    summary = summarize_profile(account, snaps, total_tracked=total_tracked)
+    summary = summarize_profile(account, era_snaps, total_tracked=total_tracked)
 
     def _latest_rating(account_id: str | None) -> int | None:
         if not account_id:
@@ -421,23 +447,30 @@ async def profile_page(
             .scalar()
         )
 
-    pm = db.get(PlayerMatch, account.id)
-    anomaly_row = db.get(AccountAnomaly, account.id)
-    anomaly = _anomaly_view(anomaly_row)
-    doppel: dict[str, Account | int | None] = {
-        "global": db.get(Account, pm.global_match_id) if pm and pm.global_match_id else None,
-        "global_sim": pm.global_similarity if pm else None,
-        "global_rating": _latest_rating(pm.global_match_id if pm else None),
-        "country": db.get(Account, pm.country_match_id) if pm and pm.country_match_id else None,
-        "country_sim": pm.country_similarity if pm else None,
-        "country_rating": _latest_rating(pm.country_match_id if pm else None),
-    }
-
-    fc_7d = forecast_rating(snaps, "overall", 7)
-    fc_30d = forecast_rating(snaps, "overall", 30)
-    fc_custom: ForecastResult | None = (
-        forecast_rating(snaps, "overall", forecast) if forecast not in (7, 30) else None
-    )
+    if era == "current":
+        pm = db.get(PlayerMatch, account.id)
+        anomaly_row = db.get(AccountAnomaly, account.id)
+        anomaly = _anomaly_view(anomaly_row)
+        doppel: dict[str, Account | int | None] = {
+            "global": db.get(Account, pm.global_match_id) if pm and pm.global_match_id else None,
+            "global_sim": pm.global_similarity if pm else None,
+            "global_rating": _latest_rating(pm.global_match_id if pm else None),
+            "country": db.get(Account, pm.country_match_id) if pm and pm.country_match_id else None,
+            "country_sim": pm.country_similarity if pm else None,
+            "country_rating": _latest_rating(pm.country_match_id if pm else None),
+        }
+        fc_7d = forecast_rating(era_snaps, "overall", 7)
+        fc_30d = forecast_rating(era_snaps, "overall", 30)
+        fc_custom: ForecastResult | None = (
+            forecast_rating(era_snaps, "overall", forecast) if forecast not in (7, 30) else None
+        )
+    else:
+        anomaly = None
+        doppel = {
+            "global": None, "global_sim": None, "global_rating": None,
+            "country": None, "country_sim": None, "country_rating": None,
+        }
+        fc_7d = fc_30d = fc_custom = None
 
     return templates.TemplateResponse(
         request,
@@ -445,6 +478,8 @@ async def profile_page(
         {
             "summary": summary,
             "collecting": False,
+            "era_empty": False,
+            "era": era,
             "fc_7d": fc_7d,
             "fc_30d": fc_30d,
             "fc_custom": fc_custom,
@@ -461,6 +496,8 @@ async def search_accounts(
     q: str = Query(default="", min_length=0, max_length=64, description="Search query (min 2 chars to return results)"),
     mode: Literal["overall", "moving", "nomove", "nmpz"] = Query(default="overall", description="Game mode for sorting"),
     country: str | None = Query(default=None, min_length=2, max_length=2, description="Filter by ISO country code"),
+    era: Literal["current", "legacy"] = Query(default="current", description="Rating system era"),
+    cutoff: datetime = Depends(get_rating_cutoff),  # noqa: B008
     db: Session = Depends(get_db),  # noqa: B008
 ) -> list[dict[str, object]]:
     if len(q) < 2:
@@ -469,9 +506,14 @@ async def search_accounts(
     if cc is not None and (len(cc) != _CC_LEN or not cc.isalpha()):
         cc = None
     rating_col, _ = _LB_MODE_FIELDS[mode]
+    era_filter = (
+        RatingSnapshot.captured_at >= cutoff
+        if era == "current"
+        else RatingSnapshot.captured_at < cutoff
+    )
     latest_snap_sq = (
         db.query(func.max(RatingSnapshot.captured_at))
-        .filter(RatingSnapshot.account_id == Account.id)
+        .filter(RatingSnapshot.account_id == Account.id, era_filter)
         .correlate(Account)
         .scalar_subquery()
     )
@@ -519,6 +561,8 @@ async def series_api(
     db: Session = Depends(get_db),  # noqa: B008
     mode: Literal["overall", "moving", "nomove", "nmpz"] = Query(default="overall", description="Game mode"),
     range_: Literal["7d", "30d", "90d", "all"] = Query(default="30d", alias="range", description="Time range"),
+    era: Literal["current", "legacy"] = Query(default="current", description="Rating system era"),
+    cutoff: datetime = Depends(get_rating_cutoff),  # noqa: B008
 ) -> SeriesResponse:
     account = db.get(Account, user_id)
     if account is None:
@@ -530,7 +574,12 @@ async def series_api(
         .order_by(RatingSnapshot.captured_at.asc())
         .all()
     )
-    raw_points = get_series(snaps, mode, range_)
+    era_snaps = (
+        [s for s in snaps if s.captured_at >= cutoff]
+        if era == "current"
+        else [s for s in snaps if s.captured_at < cutoff]
+    )
+    raw_points = get_series(era_snaps, mode, range_)
     return SeriesResponse(mode=mode, range=range_, points=raw_points)
 
 
@@ -540,6 +589,8 @@ async def forecast_api(
     db: Session = Depends(get_db),  # noqa: B008
     mode: Literal["overall", "moving", "nomove", "nmpz"] = Query(default="overall", description="Game mode"),
     horizon: int = Query(default=30, ge=1, le=365, description="Forecast horizon in days"),
+    era: Literal["current", "legacy"] = Query(default="current", description="Rating system era"),
+    cutoff: datetime = Depends(get_rating_cutoff),  # noqa: B008
 ) -> ForecastResponse:
     account = db.get(Account, user_id)
     if account is None:
@@ -551,7 +602,12 @@ async def forecast_api(
         .order_by(RatingSnapshot.captured_at.asc())
         .all()
     )
-    result = forecast_rating(snaps, mode, horizon)
+    era_snaps = (
+        [s for s in snaps if s.captured_at >= cutoff]
+        if era == "current"
+        else [s for s in snaps if s.captured_at < cutoff]
+    )
+    result = forecast_rating(era_snaps, mode, horizon)
     return ForecastResponse(
         horizon=result.horizon_days,
         mode=mode,
