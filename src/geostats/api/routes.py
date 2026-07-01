@@ -16,7 +16,6 @@ from geostats.api.schemas import (
     ForecastResponse,
     HealthResponse,
     SearchResultItem,
-    SeriesPoint,
     SeriesResponse,
 )
 from geostats.client import GeoClient
@@ -532,11 +531,7 @@ async def series_api(
         .all()
     )
     raw_points = get_series(snaps, mode, range_)
-    return SeriesResponse(
-        mode=mode,
-        range=range_,
-        points=[SeriesPoint(date=date, value=value) for date, value in raw_points],
-    )
+    return SeriesResponse(mode=mode, range=range_, points=raw_points)
 
 
 @router.get("/api/profile/{user_id}/forecast", response_model=ForecastResponse)

@@ -55,21 +55,13 @@ class SearchResultItem(BaseModel):
     }
 
 
-class SeriesPoint(BaseModel):
-    date: str = Field(..., description="ISO date (YYYY-MM-DD)", examples=["2024-06-01"])
-    value: Annotated[
-        int,
-        Field(..., ge=0, le=100_000, description="Rating on that date", examples=[1200]),
-    ]
-
-
 class SeriesResponse(BaseModel):
     mode: Literal["overall", "moving", "nomove", "nmpz"] = Field(
         ..., description="Game mode"
     )
     range: Literal["7d", "30d", "90d", "all"] = Field(..., description="Time range")
-    points: list[SeriesPoint] = Field(
-        ..., description="Rating data points sorted by date"
+    points: list[tuple[str, int]] = Field(
+        ..., description="[date, rating] pairs sorted by date"
     )
 
     model_config = {
@@ -77,7 +69,7 @@ class SeriesResponse(BaseModel):
             "examples": [{
                 "mode": "overall",
                 "range": "30d",
-                "points": [{"date": "2024-06-01", "value": 1200}],
+                "points": [["2024-06-01", 1200]],
             }]
         }
     }
