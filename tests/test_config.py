@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from geostats.config import Settings, get_settings
 
 
@@ -25,3 +27,16 @@ def test_get_settings_returns_cached_instance(monkeypatch):
     s2 = get_settings()
     assert s1 is s2
     get_settings.cache_clear()
+
+
+def test_settings_rating_system_cutoff_default(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@h:5432/d")
+    s = Settings()
+    assert s.rating_system_cutoff == datetime(2026, 7, 1, tzinfo=UTC)
+
+
+def test_settings_rating_system_cutoff_override(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@h:5432/d")
+    monkeypatch.setenv("RATING_SYSTEM_CUTOFF", "2026-08-15T00:00:00+00:00")
+    s = Settings()
+    assert s.rating_system_cutoff == datetime(2026, 8, 15, tzinfo=UTC)
