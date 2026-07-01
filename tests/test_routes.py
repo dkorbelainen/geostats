@@ -652,3 +652,55 @@ def test_forecast_era_legacy_uses_pre_cutoff_snapshots(
     assert r.status_code == 200
     data = r.json()
     assert data["n_points"] == 10  # noqa: PLR2004
+
+
+def test_profile_legacy_hides_forecast_section(
+    client: TestClient, db: Session
+) -> None:
+    db.add(_account(polled=True))
+    db.flush()
+    db.add(RatingSnapshot(
+        account_id="abcdefghij1234567890",
+        captured_at=datetime(2019, 1, 1, tzinfo=UTC),
+        rating=999,
+    ))
+    for i in range(10):
+        db.add(_snap("abcdefghij1234567890", days_ago=10 - i, rating=2000 + i * 30))
+    db.flush()
+    r = client.get("/profile/abcdefghij1234567890?era=legacy")
+    assert r.status_code == 200
+    assert "Forecast" not in r.text
+
+
+def test_profile_era_toggle_links_present(client: TestClient, db: Session) -> None:
+    db.add(_account(polled=True))
+    db.flush()
+    db.add(_snap("abcdefghij1234567890", rating=2000))
+    db.flush()
+    r = client.get("/profile/abcdefghij1234567890")
+    assert r.status_code == 200
+    assert 'href="?era=current"' in r.text
+    assert 'href="?era=legacy"' in r.text
+
+
+def test_profile_series_fetch_includes_era_var(
+    client: TestClient, db: Session
+) -> None:
+    db.add(_account(polled=True))
+    db.flush()
+    db.add(RatingSnapshot(
+        account_id="abcdefghij1234567890",
+        captured_at=datetime(2019, 1, 1, tzinfo=UTC),
+        rating=1500,
+    ))
+    db.flush()
+    r = client.get("/profile/abcdefghij1234567890?era=legacy")
+    assert r.status_code == 200
+    assert 'const ERA = "legacy";' in r.text
+
+
+def test_leaderboard_era_toggle_links_present(client: TestClient) -> None:
+    r = client.get("/leaderboard")
+    assert r.status_code == 200
+    assert "era=current" in r.text
+    assert "era=legacy" in r.text

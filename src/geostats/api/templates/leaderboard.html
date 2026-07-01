@@ -36,11 +36,17 @@
       {% else %}Top {{ limit }} players tracked by GeoStats{% endif %}
     </p>
 
+    {% set _cc_q = ('&country=' ~ country if country else '') %}
+    <div class="lb-tabs era-toggle">
+      <a class="lb-tab{% if era == 'current' %} active{% endif %}" href="/leaderboard?mode={{ mode }}&amp;limit={{ limit }}{{ _cc_q }}&amp;era=current">Current</a>
+      <a class="lb-tab{% if era == 'legacy' %} active{% endif %}" href="/leaderboard?mode={{ mode }}&amp;limit={{ limit }}{{ _cc_q }}&amp;era=legacy">Legacy</a>
+    </div>
+
     <div class="lb-controls">
       <div class="lb-limit-pills">
         {% for n in [25, 100, 250, 500] %}
         <a class="lb-limit-pill{% if limit == n %} active{% endif %}"
-           href="/leaderboard?mode={{ mode }}&amp;limit={{ n }}{% if country %}&amp;country={{ country }}{% endif %}">{{ n }}</a>
+           href="/leaderboard?mode={{ mode }}&amp;limit={{ n }}{{ _cc_q }}&amp;era={{ era }}">{{ n }}</a>
         {% endfor %}
       </div>
       <div class="lb-country-wrap" id="lb-country-wrap">
@@ -64,7 +70,7 @@
     </div>
 
     <div class="lb-tabs">
-      {% set _q = '&limit=' ~ limit ~ ('&country=' ~ country if country else '') %}
+      {% set _q = '&limit=' ~ limit ~ _cc_q ~ '&era=' ~ era %}
       <a class="lb-tab{% if mode == 'overall' %} active{% endif %}" href="/leaderboard?mode=overall{{ _q }}">Overall</a>
       <a class="lb-tab{% if mode == 'moving' %} active{% endif %}" href="/leaderboard?mode=moving{{ _q }}">Moving</a>
       <a class="lb-tab{% if mode == 'nomove' %} active{% endif %}" href="/leaderboard?mode=nomove{{ _q }}">No Move</a>
@@ -117,6 +123,7 @@
   var mode = {{ mode | tojson }};
   var limit = {{ limit | tojson }};
   var country = {{ (country or '') | tojson }};
+  var era = {{ era | tojson }};
   var countries = {{ countries | tojson }};
   var posKey = {overall:'position_overall',moving:'position_moving',nomove:'position_nomove',nmpz:'position_nmpz'}[mode] || 'position_overall';
   var ratingKey = {overall:'rating',moving:'rating_moving',nomove:'rating_nomove',nmpz:'rating_nmpz'}[mode] || 'rating';
@@ -168,7 +175,7 @@
     var q = this.value.trim();
     if (q.length < 2) { restore(); return; }
     timer = setTimeout(function () {
-      var url = '/api/search?q='+encodeURIComponent(q)+'&mode='+encodeURIComponent(mode);
+      var url = '/api/search?q='+encodeURIComponent(q)+'&mode='+encodeURIComponent(mode)+'&era='+encodeURIComponent(era);
       if (country) url += '&country='+encodeURIComponent(country);
       fetch(url)
         .then(function(res){return res.json();})
@@ -206,7 +213,7 @@
   });
 
   function buildUrl(cc) {
-    var u = '/leaderboard?mode='+encodeURIComponent(mode)+'&limit='+encodeURIComponent(limit);
+    var u = '/leaderboard?mode='+encodeURIComponent(mode)+'&limit='+encodeURIComponent(limit)+'&era='+encodeURIComponent(era);
     if (cc) u += '&country='+encodeURIComponent(cc);
     return u;
   }
