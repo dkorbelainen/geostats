@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -6,8 +7,9 @@ from sqlalchemy.orm import Session
 log = logging.getLogger(__name__)
 
 
-def compute_ranks(db: Session) -> None:
-    result = db.execute(text("""
+def compute_ranks(db: Session, cutoff: datetime) -> None:
+    result = db.execute(
+        text("""
         WITH latest AS (
             SELECT DISTINCT ON (rs.account_id)
                 rs.account_id,
@@ -19,6 +21,7 @@ def compute_ranks(db: Session) -> None:
             FROM rating_snapshots rs
             JOIN accounts a ON a.id = rs.account_id
             WHERE a.last_polled_at IS NOT NULL
+              AND rs.captured_at >= :cutoff
             ORDER BY rs.account_id, rs.captured_at DESC
         ),
         ranked AS (
@@ -50,6 +53,8 @@ def compute_ranks(db: Session) -> None:
         FROM ranked r
         WHERE rs.account_id = r.account_id
           AND rs.captured_at = r.captured_at
-    """))
+    """),
+        {"cutoff": cutoff},
+    )
     log.info("compute_ranks updated %d snapshot rows", result.rowcount)
     # caller is responsible for commit (session_scope in prod, test fixture rollback in tests)

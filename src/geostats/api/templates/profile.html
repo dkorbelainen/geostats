@@ -1,18 +1,18 @@
 {% extends "base.html" %}
 {% block title %}
-  {% if collecting %}{{ account.nick }}{% else %}{{ summary.account.nick }}{% endif %} — GeoStats
+  {% if collecting or era_empty %}{{ account.nick }}{% else %}{{ summary.account.nick }}{% endif %} — GeoStats
 {% endblock %}
 {% block og %}
-{% set acc = summary.account if not collecting else account %}
+{% set acc = summary.account if (not collecting and not era_empty) else account %}
 <meta property="og:title" content="{{ acc.nick }} — GeoStats">
-<meta property="og:description" content="Rating: {{ summary.current['overall'] | fmt_rating if not collecting else '…' }} · GeoGuessr rank tracker">
+<meta property="og:description" content="Rating: {{ summary.current['overall'] | fmt_rating if (not collecting and not era_empty) else '…' }} · GeoGuessr rank tracker">
 <meta property="og:image" content="https://geostats.tech/static/social-card.png">
 <meta property="og:url" content="https://geostats.tech{{ request.url.path }}">
 <meta name="twitter:card" content="summary_large_image">
 {% endblock %}
 {% block body %}
 {% if collecting %}<meta http-equiv="refresh" content="60">{% endif %}
-{% set acc = summary.account if not collecting else account %}
+{% set acc = summary.account if (not collecting and not era_empty) else account %}
 <div class="page">
 
   <div class="top-banner">
@@ -51,7 +51,7 @@
             {% if acc.country_code %}
             <span class="meta-txt">{{ acc.country_code | country_flag }} {{ acc.country_code }}</span>
             {% endif %}
-            {% if not collecting and summary.snaps %}
+            {% if not collecting and not era_empty and summary.snaps %}
             {% set latest = summary.snaps[-1] %}
             {% if latest.division_name %}
             {% set dn = latest.division_name | lower %}
@@ -69,10 +69,26 @@
   </div>
 
   <div class="content">
+  {% if not collecting %}
+  <div class="lb-tabs era-toggle">
+    <a class="lb-tab{% if era == 'current' %} active{% endif %}" href="?era=current">Current</a>
+    <a class="lb-tab{% if era == 'legacy' %} active{% endif %}" href="?era=legacy">Legacy</a>
+  </div>
+  {% endif %}
   {% if collecting %}
     <div class="collecting-msg">
       <h2>Collecting data…</h2>
       <p>{{ acc.nick }} has been added to tracking. Stats appear after the next poll (up to 12 h).</p>
+    </div>
+  {% elif era_empty %}
+    <div class="collecting-msg">
+      {% if era == 'current' %}
+      <h2>No data yet</h2>
+      <p>{{ acc.nick }} hasn't played since the rating system changed. Stats appear after their next game.</p>
+      {% else %}
+      <h2>No legacy data</h2>
+      <p>{{ acc.nick }} has no history from before the rating system change.</p>
+      {% endif %}
     </div>
   {% else %}
     {% set latest = summary.snaps[-1] if summary.snaps else none %}
@@ -235,6 +251,7 @@
     </div>
     {% endif %}
 
+    {% if era == 'current' %}
     <p class="section-label">Forecast (Overall)</p>
     <div class="forecast-grid">
       {% for fc, label in [(fc_7d, "7 days"), (fc_30d, "30 days")] + ([(fc_custom, forecast_horizon ~ " days")] if fc_custom is not none else []) %}
@@ -254,14 +271,16 @@
       </div>
       {% endfor %}
     </div>
+    {% endif %}
 
   {% endif %}
   </div>
 </div>
 
-{% if not collecting %}
+{% if not collecting and not era_empty %}
 <script>
 const PROFILE_ID = {{ summary.account.id | tojson }};
+const ERA = {{ era | tojson }};
 let currentMode = "overall";
 let currentRange = "30d";
 const W = 600, H = 120, PAD = 8;
@@ -302,7 +321,7 @@ function drawChart(points) {
 
 async function fetchAndDraw(mode, range) {
   try {
-    const r = await fetch(`/api/profile/${PROFILE_ID}/series?mode=${mode}&range=${range}`);
+    const r = await fetch(`/api/profile/${PROFILE_ID}/series?mode=${mode}&range=${range}&era=${ERA}`);
     if (!r.ok) return;
     const data = await r.json();
     drawChart(data.points);
@@ -393,7 +412,7 @@ function drawSpark(svgEl, points) {
 async function loadSparklines() {
   for (const mode of ["moving", "nomove", "nmpz"]) {
     try {
-      const r = await fetch(`/api/profile/${PROFILE_ID}/series?mode=${mode}&range=30d`);
+      const r = await fetch(`/api/profile/${PROFILE_ID}/series?mode=${mode}&range=30d&era=${ERA}`);
       if (!r.ok) continue;
       const data = await r.json();
       const el = document.querySelector(`.mode-card[data-mode="${mode}"] .mode-spark`);

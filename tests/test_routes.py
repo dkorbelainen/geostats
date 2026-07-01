@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from geostats.api.app import create_app
-from geostats.api.deps import get_db, get_geo_client
+from geostats.api.deps import get_db, get_geo_client, get_rating_cutoff
 from geostats.client import GeoClient, SearchResult
 from geostats.models import Account, RatingSnapshot
 
@@ -18,11 +18,15 @@ def mock_geo_client() -> AsyncMock:
     return mock
 
 
+_CUTOFF = datetime(2020, 1, 1, tzinfo=UTC)
+
+
 @pytest.fixture
 def client(db: Session, mock_geo_client: AsyncMock) -> TestClient:
     app = create_app()
     app.dependency_overrides[get_db] = lambda: db
     app.dependency_overrides[get_geo_client] = lambda: mock_geo_client
+    app.dependency_overrides[get_rating_cutoff] = lambda: _CUTOFF
     return TestClient(app)
 
 
@@ -488,3 +492,215 @@ def test_search_sorts_by_rating_desc(client: TestClient, db: Session) -> None:
     data = r.json()
     ratings = [row["rating"] for row in data]
     assert ratings == sorted(ratings, reverse=True), ratings
+
+
+# ── era split ─────────────────────────────────────────────────────────────────
+
+def test_profile_era_current_excludes_pre_cutoff_snapshot(
+    client: TestClient, db: Session
+) -> None:
+    db.add(_account(polled=True))
+    db.flush()
+    db.add(RatingSnapshot(
+        account_id="abcdefghij1234567890",
+        captured_at=datetime(2019, 1, 1, tzinfo=UTC),
+        rating=999,
+    ))
+    db.add(_snap("abcdefghij1234567890", rating=2222))
+    db.flush()
+    r = client.get("/profile/abcdefghij1234567890")
+    assert r.status_code == 200
+    assert "2 222" in r.text
+    assert "999" not in r.text
+
+
+def test_profile_era_legacy_shows_only_pre_cutoff_snapshot(
+    client: TestClient, db: Session
+) -> None:
+    db.add(_account(polled=True))
+    db.flush()
+    db.add(RatingSnapshot(
+        account_id="abcdefghij1234567890",
+        captured_at=datetime(2019, 1, 1, tzinfo=UTC),
+        rating=999,
+    ))
+    db.add(_snap("abcdefghij1234567890", rating=2222))
+    db.flush()
+    r = client.get("/profile/abcdefghij1234567890?era=legacy")
+    assert r.status_code == 200
+    assert "999" in r.text
+    assert "2 222" not in r.text
+
+
+def test_profile_era_current_empty_state_when_no_post_cutoff_data(
+    client: TestClient, db: Session
+) -> None:
+    db.add(_account(polled=True))
+    db.flush()
+    db.add(RatingSnapshot(
+        account_id="abcdefghij1234567890",
+        captured_at=datetime(2019, 1, 1, tzinfo=UTC),
+        rating=999,
+    ))
+    db.flush()
+    r = client.get("/profile/abcdefghij1234567890")
+    assert r.status_code == 200
+    assert "No data yet" in r.text
+
+
+def test_profile_legacy_hides_anomaly_card(client: TestClient, db: Session) -> None:
+    from geostats.models import AccountAnomaly
+
+    now = datetime.now(UTC)
+    old = datetime(2019, 1, 1, tzinfo=UTC)
+    db.add(Account(id="anomB", nick="anomB", slug="anomb", created_at=now, last_polled_at=now))
+    db.add(RatingSnapshot(
+        account_id="anomB", captured_at=old, rating=2500, win_streak=10,
+        guessed_first_rate=0.7, games_played=300, games_won=210,
+        avg_guess_distance_km=80.0,
+    ))
+    db.add(RatingSnapshot(
+        account_id="anomB", captured_at=now, rating=2500, win_streak=10,
+        guessed_first_rate=0.7, games_played=300, games_won=210,
+        avg_guess_distance_km=80.0,
+    ))
+    db.add(AccountAnomaly(
+        account_id="anomB", score=-0.2, confidence_pct=85,
+        driver_1_feature="peak_win_streak", driver_1_z=3.4,
+        driver_2_feature="mean_avg_guess_distance_km", driver_2_z=-2.1,
+        computed_at=now,
+    ))
+    db.commit()
+
+    resp = client.get("/profile/anomb?era=legacy")
+    assert resp.status_code == 200
+    assert "Anomaly detection" not in resp.text
+
+
+def test_leaderboard_era_legacy_shows_pre_cutoff_only_account(
+    client: TestClient, db: Session
+) -> None:
+    old = datetime(2019, 1, 1, tzinfo=UTC)
+    acc = Account(id="legacyacc111111111111", nick="LegacyOnly", created_at=old, last_polled_at=old, tracked=True)
+    db.add(acc)
+    db.flush()
+    db.add(RatingSnapshot(account_id="legacyacc111111111111", captured_at=old, rating=1800))
+    db.flush()
+
+    r_current = client.get("/leaderboard?era=current")
+    assert r_current.status_code == 200
+    assert "LegacyOnly" not in r_current.text
+
+    r_legacy = client.get("/leaderboard?era=legacy")
+    assert r_legacy.status_code == 200
+    assert "LegacyOnly" in r_legacy.text
+
+
+def test_search_era_current_shows_null_rating_for_pre_cutoff_only_account(
+    client: TestClient, db: Session
+) -> None:
+    old = datetime(2019, 1, 1, tzinfo=UTC)
+    db.add(Account(id="searchlegacy1111111a", nick="SearchLegacy", created_at=old, last_polled_at=old))
+    db.flush()
+    db.add(RatingSnapshot(account_id="searchlegacy1111111a", captured_at=old, rating=1700))
+    db.flush()
+
+    r_current = client.get("/api/search?q=SearchLegacy")
+    assert r_current.status_code == 200
+    data = r_current.json()
+    assert len(data) == 1
+    assert data[0]["rating"] is None
+
+    r_legacy = client.get("/api/search?q=SearchLegacy&era=legacy")
+    assert r_legacy.status_code == 200
+    data2 = r_legacy.json()
+    assert len(data2) == 1
+    assert data2[0]["rating"] == 1700  # noqa: PLR2004
+
+
+def test_series_era_legacy_returns_pre_cutoff_points(
+    client: TestClient, db: Session
+) -> None:
+    db.add(_account(polled=True))
+    db.flush()
+    db.add(RatingSnapshot(
+        account_id="abcdefghij1234567890",
+        captured_at=datetime(2019, 1, 1, tzinfo=UTC),
+        rating=1234,
+    ))
+    db.flush()
+    r = client.get("/api/profile/abcdefghij1234567890/series?range=all&era=legacy")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["points"] == [["2019-01-01", 1234]]
+
+
+def test_forecast_era_legacy_uses_pre_cutoff_snapshots(
+    client: TestClient, db: Session
+) -> None:
+    db.add(_account(polled=True))
+    db.flush()
+    base = datetime(2019, 1, 1, tzinfo=UTC)
+    for i in range(10):
+        db.add(RatingSnapshot(
+            account_id="abcdefghij1234567890",
+            captured_at=base + timedelta(days=i),
+            rating=2000 + i * 30,
+        ))
+    db.flush()
+    r = client.get("/api/profile/abcdefghij1234567890/forecast?horizon=7&era=legacy")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["n_points"] == 10  # noqa: PLR2004
+
+
+def test_profile_legacy_hides_forecast_section(
+    client: TestClient, db: Session
+) -> None:
+    db.add(_account(polled=True))
+    db.flush()
+    db.add(RatingSnapshot(
+        account_id="abcdefghij1234567890",
+        captured_at=datetime(2019, 1, 1, tzinfo=UTC),
+        rating=999,
+    ))
+    for i in range(10):
+        db.add(_snap("abcdefghij1234567890", days_ago=10 - i, rating=2000 + i * 30))
+    db.flush()
+    r = client.get("/profile/abcdefghij1234567890?era=legacy")
+    assert r.status_code == 200
+    assert "Forecast" not in r.text
+
+
+def test_profile_era_toggle_links_present(client: TestClient, db: Session) -> None:
+    db.add(_account(polled=True))
+    db.flush()
+    db.add(_snap("abcdefghij1234567890", rating=2000))
+    db.flush()
+    r = client.get("/profile/abcdefghij1234567890")
+    assert r.status_code == 200
+    assert 'href="?era=current"' in r.text
+    assert 'href="?era=legacy"' in r.text
+
+
+def test_profile_series_fetch_includes_era_var(
+    client: TestClient, db: Session
+) -> None:
+    db.add(_account(polled=True))
+    db.flush()
+    db.add(RatingSnapshot(
+        account_id="abcdefghij1234567890",
+        captured_at=datetime(2019, 1, 1, tzinfo=UTC),
+        rating=1500,
+    ))
+    db.flush()
+    r = client.get("/profile/abcdefghij1234567890?era=legacy")
+    assert r.status_code == 200
+    assert 'const ERA = "legacy";' in r.text
+
+
+def test_leaderboard_era_toggle_links_present(client: TestClient) -> None:
+    r = client.get("/leaderboard")
+    assert r.status_code == 200
+    assert "era=current" in r.text
+    assert "era=legacy" in r.text

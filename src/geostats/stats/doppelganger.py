@@ -48,7 +48,7 @@ def _row_features(rating: int | None, moving: int | None, nomove: int | None,
     )
 
 
-def _load_rows(db: Session) -> list[_Row]:
+def _load_rows(db: Session, cutoff: datetime) -> list[_Row]:
     sql = text("""
         SELECT DISTINCT ON (rs.account_id)
             rs.account_id, a.country_code,
@@ -57,11 +57,11 @@ def _load_rows(db: Session) -> list[_Row]:
             rs.games_played, rs.games_won
         FROM rating_snapshots rs
         JOIN accounts a ON a.id = rs.account_id
-        WHERE a.tracked = true AND rs.rating IS NOT NULL
+        WHERE a.tracked = true AND rs.rating IS NOT NULL AND rs.captured_at >= :cutoff
         ORDER BY rs.account_id, rs.captured_at DESC
     """)
     rows: list[_Row] = []
-    for r in db.execute(sql).fetchall():
+    for r in db.execute(sql, {"cutoff": cutoff}).fetchall():
         feats = _row_features(
             r.rating, r.rating_moving, r.rating_nomove, r.rating_nmpz,
             r.avg_guess_distance_km, r.guessed_first_rate,
@@ -101,8 +101,8 @@ def _similarity(d: float) -> int:
     return int(round(max(0.0, min(100.0, sim))))
 
 
-def compute_matches(db: Session) -> int:
-    rows = _load_rows(db)
+def compute_matches(db: Session, cutoff: datetime) -> int:
+    rows = _load_rows(db, cutoff)
     if len(rows) < 2:
         log.info("doppelganger: not enough players (%d)", len(rows))
         return 0
