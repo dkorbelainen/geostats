@@ -41,3 +41,7 @@ node_modules/
 .vscode/
 .DS_Store
 *.swp
+
+# Benchmark data and intermediate results
+benchmarks/data/
+benchmarks/forecast_results.json

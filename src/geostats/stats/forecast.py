@@ -1,27 +1,25 @@
 from __future__ import annotations
 
-import logging
-import time
+import json
 from dataclasses import dataclass
+from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 import numpy as np
 
 from geostats.models import RatingSnapshot
 from geostats.stats import _FIELD_ATTR
+from geostats.stats.forecast_features import Floats, History, features
+from geostats.stats.forecast_model import Model, predict
 
-logger = logging.getLogger(__name__)
-
+_DAY = 86400.0
 _MIN_POINTS = 5
 _MIN_SPAN_DAYS = 7
-_MIN_DAILY_POINTS = 5            # robust slope needs at least this many distinct UTC days
-_MIN_PAIRS_FOR_SLOPE = 2         # at least one pair is required for any slope estimate
-_WINDOW_DAYS = 30                # only the recent window informs the slope
-_MAX_DAILY_DELTA = 150           # hard cap on slope contribution per day
-_FULL_CREDIBILITY_DAYS = 20      # at >=20 daily points, slope used at full weight
-_PEAK_HEADROOM = 1.08            # forecast can exceed all-time high by at most 8%
-# Resource management: cap input size so aggregation stays O(1) in memory/CPU
-_MAX_POINTS = 365
+_MIN_DAYS = 5
+# benchmarks/forecast.md: on the other mode ratings the model does not beat "no change"
+_FORECAST_FIELDS = frozenset({"overall", "nomove"})
+_MODEL_PATH = Path(__file__).resolve().parent.parent / "data" / "forecast_model.json"
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,52 +31,36 @@ class ForecastResult:
     n_points: int
 
 
-def _daily_series(
-    times: np.ndarray,
-    ratings: np.ndarray,
-    window_days: int,
-) -> tuple[np.ndarray, np.ndarray]:
-    """Collapse snapshots to one rating per UTC day within the recent window.
+@lru_cache
+def _models() -> dict[int, Model]:
+    stored = json.loads(_MODEL_PATH.read_text())
+    return {int(days): model for days, model in stored["horizons"].items()}
 
-    Multiple snapshots per day are common (intraday polling) — using all of
-    them lets short bursts dominate the trend. We keep the last rating of
-    each UTC day inside the window.
-    """
-    cutoff = times[-1] - window_days * 86400.0
-    buckets: dict[int, float] = {}
-    for t, r in zip(times, ratings, strict=True):
-        if t >= cutoff:
-            buckets[int(t // 86400)] = float(r)
-    if len(buckets) < _MIN_DAILY_POINTS:
-        # Fall back to whatever we have if the recent window is sparse.
-        buckets = {}
-        for t, r in zip(times, ratings, strict=True):
-            buckets[int(t // 86400)] = float(r)
-    days_sorted = sorted(buckets.keys())
+
+def enough_history(times: Floats) -> bool:
     return (
-        np.array(days_sorted, dtype=np.float64),
-        np.array([buckets[d] for d in days_sorted], dtype=np.float64),
+        times.size >= _MIN_POINTS
+        and float(times[-1] - times[0]) >= _MIN_SPAN_DAYS * _DAY
+        and np.unique(times // _DAY).size >= _MIN_DAYS
     )
 
 
-def _theil_sen_slope(days: np.ndarray, ratings: np.ndarray) -> float:
-    """Median pairwise slope — robust to outlier sessions.
+def predicted_change(history: History, horizon_days: int) -> float:
+    """Rating change `horizon_days` ahead of the last snapshot.
 
-    Unlike OLS/Ridge, a single noisy day shifts the median by at most one
-    pair, so the predicted delta does not swing dramatically as new data
-    arrives.
+    The models are trained for fixed horizons; days in between are interpolated
+    and longer horizons keep the value of the longest one.
     """
-    if days.size < _MIN_PAIRS_FOR_SLOPE:
-        return 0.0
-    di = days[:, None]
-    dj = days[None, :]
-    ri = ratings[:, None]
-    rj = ratings[None, :]
-    mask = dj > di
-    if not np.any(mask):
-        return 0.0
-    slopes = (rj - ri)[mask] / (dj - di)[mask]
-    return float(np.median(slopes))
+    models = _models()
+    row = features(history)[None, :]
+    days = sorted(models)
+    changes = [float(predict(models[d], row)[0]) for d in days]
+    return float(np.interp(horizon_days, [0, *days], [0.0, *changes]))
+
+
+def _stat(snaps: list[RatingSnapshot], name: str) -> Floats:
+    values = [getattr(s, name) for s in snaps]
+    return np.array([np.nan if v is None else float(v) for v in values], dtype=np.float64)
 
 
 def forecast_rating(
@@ -86,62 +68,32 @@ def forecast_rating(
     field: Literal["overall", "moving", "nomove", "nmpz"],
     horizon_days: int,
 ) -> ForecastResult:
-    _t0 = time.perf_counter()
     attr = _FIELD_ATTR[field]
-    pairs = [
-        (s.captured_at.timestamp(), int(getattr(s, attr)))
-        for s in snaps
-        if getattr(s, attr) is not None
-    ]
-    if len(pairs) > _MAX_POINTS:
-        pairs = pairs[-_MAX_POINTS:]
-    n = len(pairs)
-    null = ForecastResult(
-        horizon_days=horizon_days,
-        predicted_delta=None,
-        predicted_rating=None,
-        confidence=None,
-        n_points=n,
+    rated = [s for s in snaps if getattr(s, attr) is not None]
+    times = np.array([s.captured_at.timestamp() for s in rated], dtype=np.float64)
+    if field not in _FORECAST_FIELDS or not enough_history(times):
+        return ForecastResult(
+            horizon_days=horizon_days,
+            predicted_delta=None,
+            predicted_rating=None,
+            confidence=None,
+            n_points=len(rated),
+        )
+    history = History(
+        times,
+        _stat(rated, attr),
+        _stat(rated, "games_played"),
+        _stat(rated, "games_won"),
+        _stat(rated, "win_streak"),
+        _stat(rated, "guessed_first_rate"),
+        _stat(rated, "avg_guess_distance_km"),
     )
-    if n < _MIN_POINTS:
-        logger.debug("forecast skipped: n=%d < min=%d elapsed=%.3fs", n, _MIN_POINTS, time.perf_counter() - _t0)
-        return null
-
-    times = np.array([p[0] for p in pairs], dtype=np.float64)
-    ratings = np.array([p[1] for p in pairs], dtype=np.float64)
-
-    span_days = (times[-1] - times[0]) / 86400.0
-    if span_days < _MIN_SPAN_DAYS:
-        logger.debug("forecast skipped: span=%.1fd < min=%dd elapsed=%.3fs", span_days, _MIN_SPAN_DAYS, time.perf_counter() - _t0)
-        return null
-
-    daily_days, daily_ratings = _daily_series(times, ratings, _WINDOW_DAYS)
-    if daily_days.size < _MIN_DAILY_POINTS:
-        logger.debug("forecast skipped: daily_points=%d < min=%d elapsed=%.3fs", daily_days.size, _MIN_DAILY_POINTS, time.perf_counter() - _t0)
-        return null
-
-    slope_per_day = _theil_sen_slope(daily_days, daily_ratings)
-
-    # Credibility shrinkage: small samples get pulled toward zero so the
-    # prediction does not commit to a slope estimated from a handful of days.
-    credibility = min(1.0, daily_days.size / float(_FULL_CREDIBILITY_DAYS))
-    slope_per_day *= credibility
-
-    raw_delta = slope_per_day * float(horizon_days)
-    max_delta = float(_MAX_DAILY_DELTA * horizon_days)
-    clamped_delta = float(np.clip(raw_delta, -max_delta, max_delta))
-
-    current = float(ratings[-1])
-    ceiling = float(np.max(ratings)) * _PEAK_HEADROOM
-    predicted_rating = int(round(float(np.clip(current + clamped_delta, 0.0, ceiling))))
-    predicted_delta = predicted_rating - int(round(current))
-
-    result = ForecastResult(
+    current = int(history.ratings[-1])
+    predicted = max(0, int(round(current + predicted_change(history, horizon_days))))
+    return ForecastResult(
         horizon_days=horizon_days,
-        predicted_delta=predicted_delta,
-        predicted_rating=predicted_rating,
+        predicted_delta=predicted - current,
+        predicted_rating=predicted,
         confidence=None,
-        n_points=n,
+        n_points=len(rated),
     )
-    logger.debug("forecast field=%s horizon=%d n=%d elapsed=%.3fs", field, horizon_days, n, time.perf_counter() - _t0)
-    return result
